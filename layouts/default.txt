@@ -1,7 +1,7 @@
 ---
 extension: html
 filter:    erb
-description: MongoDB Recipes.
+description: A cookbook full of mouth-watering MongoDB recipes.
 ---
 <html>
 <head>
@@ -15,6 +15,8 @@ description: MongoDB Recipes.
 
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
   <meta name="description" content="<%= @page.description || 'Standard' %>" />
+
+  <link rel="shortcut icon" href="/favicon.ico">
 </head>
 <body>
 
