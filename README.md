@@ -27,3 +27,11 @@ You can:
 
 Creative Commons Attribution Share Alike 3.0
 Inspired by The Redis Cookbook (http://rediscookbook.org)
+
+
+### Gems to Install
+* gem install webby
+* gem install ultraviolet
+* gem install maruku
+* gem install RedCloth
+* gem install rdiscount
