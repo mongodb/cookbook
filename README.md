@@ -19,7 +19,7 @@ You can:
 
 * Add example code for any existing recipe, in any programming language.
   Fork the repo and add your code into the relevant directory!
-* Work on the rediscookbook.org website. The site itself is open source and lives in `site`.
+* Work on the cookbook.mongodb.org website. All the site lives in `content`.
 * Look for typos, formatting errors, missing links, and other little things. 
   No potential improvement is 'too small' -- fork for anything.
 
@@ -27,7 +27,6 @@ You can:
 
 Creative Commons Attribution Share Alike 3.0
 Inspired by The Redis Cookbook (http://rediscookbook.org)
-
 
 ### Gems to Install
 * gem install webby
