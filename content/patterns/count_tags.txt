@@ -1,0 +1,109 @@
+---
+title:      Counting Tags
+created_at: 2010-04-19 10:05:24.036546 -04:00
+recipe: true
+author: Kristina Chodorow
+description: How to use MapReduce to find the tags for a given collection.
+filter:
+  - erb
+  - markdown
+---
+
+### Problem
+
+You want to create a tag cloud or see what the most popular tags are in a given
+collection, say, "posts".  Each document in the collection has an array of tags,
+such as:
+
+<% code 'javascript' do %>
+{
+    "title" : "A blog post",
+    "author" : "Kristina",
+    "content" : "...",
+    "tags" : ["MongoDB", "Map/Reduce", "Recipe"]
+}
+<% end %>
+
+We want to end up with a "tags" collection that has documents that look like 
+this:
+
+<% code 'javascript' do %>
+{"_id" : "MongoDB", "value" : 4}
+{"_id" : "Map/Reduce", "value" : 2}
+{"_id" : "Recipe", "value" : 7}
+{"_id" : "Group", "value" : 1}
+<% end %>
+
+### Solution
+
+Use the `mapreduce` database command.  Emit each tag in the map function, then 
+count them in the reduce function.
+
+#### 1. Map
+
+The map function first checks if there is a tags field, as running a for-loop on
+undef would cause an error.  Once that has been established, we go through each
+element, emiting the tag name and a count of 1:
+
+<% code 'javascript' do %>
+map = function() {
+    if (!this.tags) {
+        return;
+    }
+
+    for (index in this.tags) {
+        emit(this.tags[index], 1);
+    }
+}
+<% end %>
+
+#### 2. Reduce
+
+For the reduce function, we initialize a counter to 0 and then add each element
+of the `current` array to it.  Then we return the final count.
+
+<% code 'javascript' do %>
+reduce = function(previous, current) {
+    var count = 0;
+
+    for (index in current) {
+        count += current[index];
+    }
+
+    return count;
+}
+<% end %>
+
+#### 3. Call the `mapreduce` command
+
+We want to put the results in the "tags" collection, so we'll specify that with 
+the `out` parameter:
+
+<% code 'javascript' do %>
+> result = db.runCommand({
+... "mapreduce" : "posts",
+... "map" : map,
+... "reduce" : reduce,
+... "out" : "tags"})
+<% end %>
+
+Now, if we query the tags collection, we find:
+
+<% code 'javascript' do %>
+> db.tags.find()
+{"_id" : "MongoDB", "value" : 4}
+{"_id" : "Map/Reduce", "value" : 2}
+{"_id" : "Recipe", "value" : 7}
+{"_id" : "Group", "value" : 1}
+<% end %>
+
+### See Also
+
+* The MongoDB [docs on aggregation][1]
+* [Map-Reduce Basics] by Kyle Banker
+* [MapReduce: the Fanfiction] by Kristina Chodorow
+
+  [1]: http://www.mongodb.org/display/DOCS/Aggregation
+  [2]: http://kylebanker.com/blog/2009/12/mongodb-map-reduce-basics/
+  [3]: www.snailinaturtleneck.com/blog/2010/03/15/mapreduce-the-fanfiction/
+
