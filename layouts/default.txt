@@ -1,0 +1,44 @@
+---
+extension: html
+filter:    erb
+description: MongoDB Recipes.
+---
+<html>
+<head>
+  <% if @page.recipe %>
+    <title><%= @page.title %> | The MongoDB Cookbook</title>
+  <% else %>
+    <title>The MongoDB Cookbook</title>
+  <% end %>
+  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="stylesheet" href="/css/code.css" />
+
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="description" content="<%= @page.description || 'Standard' %>" />
+</head>
+<body>
+
+<a href="http://github.com/you"><img style="position: absolute; top: 0; right: 0; border: 0;" src="http://s3.amazonaws.com/github/ribbons/forkme_right_green_007200.png" alt="Fork me on GitHub" /></a>
+
+<div class='header'>
+  <h1><a href='/'><img src="/img/logo-mongodb-home.png" border="0" alt="MongoDB Cookbook"></a>
+  <a href='/'><img src="/img/cookbook.png" border="0" alt="MongoDB Cookbook"></a></h1>
+</div>
+
+<div class='main'>
+  <% if @page.recipe %>
+    <h1><%= @page.title %></h1>
+
+    <div class='credit'>
+      Credit: <%= @page.author %>
+    </div>
+  <% end %>
+  <%= @content %>
+</div>
+
+<div class='footer'>
+  Edited by <a href='http://mongodb.org'>The MongoDB Folks</a>. License: <a href="http://creativecommons.org/licenses/by-sa/3.0/">Creative Commons Attribution Share Alike 3.0</a>. Inspired by <a href="http://rediscookbook.org/">The Redis Cookbook</a>.
+</div>
+
+</body>
+</html>

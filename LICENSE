@@ -1,0 +1,21 @@
+The MongoDB Cookbook is inspired by The Redis Cookbook, Copyright (c)
+2010 Ted Nyman [http://ted.io], Tim Lossen [http://tim.lossen.de]
+
+This work is licensed under the Creative Commons Attribution
+Share Alike Unported License (Version 3.0):
+
+http://creativecommons.org/licenses/by_sa/3.0/legalcode
+
+Summary:
+
+You are free to share (to copy, distribute and transmit) and
+to remix (to adapt) this work -- under the following
+conditions:
+
+(a) You must attribute the work in the manner specified by the
+author or licensor (but not in any way that suggests that they
+endorse you or your use of the work).
+
+(b) If you alter, transform, or build upon this work, you may
+distribute the resulting work only under the same, similar or
+a compatible license.
