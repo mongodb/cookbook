@@ -18,7 +18,7 @@ description: MongoDB Recipes.
 </head>
 <body>
 
-<a href="http://github.com/you"><img style="position: absolute; top: 0; right: 0; border: 0;" src="http://s3.amazonaws.com/github/ribbons/forkme_right_green_007200.png" alt="Fork me on GitHub" /></a>
+<a href="http://github.com/mongodb/cookbook"><img style="position: absolute; top: 0; right: 0; border: 0;" src="http://s3.amazonaws.com/github/ribbons/forkme_right_green_007200.png" alt="Fork me on GitHub" /></a>
 
 <div class='header'>
   <h1><a href='/'><img src="/img/logo-mongodb-home.png" border="0" alt="MongoDB Cookbook"></a>
@@ -34,6 +34,24 @@ description: MongoDB Recipes.
     </div>
   <% end %>
   <%= @content %>
+
+  <% if @page.recipe %>
+
+
+<div id="disqus_thread"></div>
+<script type="text/javascript">
+  /**
+    * var disqus_identifier; [Optional but recommended: Define a unique identifier (e.g. post id or slug) for this thread] 
+    */
+  (function() {
+   var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+   dsq.src = 'http://mongodb.disqus.com/embed.js';
+   (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript=mongodb">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">blog comments powered by <span class="logo-disqus">Disqus</span></a>
+  <% end %>
 </div>
 
 <div class='footer'>
