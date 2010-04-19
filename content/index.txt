@@ -5,7 +5,13 @@ dirty: true
 filter:
   - erb
 ---
-<h1>Recipes</h1>
+<h1>A Cookbook for MongoDB</h1>
+<p class='large'>Welcome to the <a href='http://mongodb.org'>MongoDB</a> cookbook. Here, we hope to provide guidance on all the common ways of using MongoDB. Got any wisdom to share? You can submit a recipe via GitHub by following the <a href="http://github.com/mongodb/cookbook/blob/master/README.md">instructions in the README</a>.
+</p>
+
+<p>
+If you're just here to browse, see our recipes below.
+</p>
 
 <% ['patterns', 'operations'].each do |subject| %>
   <% articles = @pages.find(:all, :in_directory => subject, :recursive => true, :recipe => true) %>

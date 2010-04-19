@@ -89,3 +89,8 @@ body pre {
   border-top: 2px solid #999;	
   height: 40px;
 }
+
+.large {
+  font-size: 15px;
+  line-height: 20px;
+}
