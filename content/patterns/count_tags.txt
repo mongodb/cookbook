@@ -100,8 +100,8 @@ Now, if we query the tags collection, we find:
 ### See Also
 
 * The MongoDB [docs on aggregation][1]
-* [Map-Reduce Basics] by Kyle Banker
-* [MapReduce: the Fanfiction] by Kristina Chodorow
+* [Map-Reduce Basics][2] by Kyle Banker
+* [MapReduce: the Fanfiction][3] by Kristina Chodorow
 
   [1]: http://www.mongodb.org/display/DOCS/Aggregation
   [2]: http://kylebanker.com/blog/2009/12/mongodb-map-reduce-basics/
