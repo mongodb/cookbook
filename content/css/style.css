@@ -70,6 +70,7 @@ body pre {
 .main {
   float:left;
   padding-left: 100px;
+  margin-bottom: 40px;
   width: 750px;
 }
 
