@@ -28,7 +28,6 @@ Let's say you're building a social news site like Digg. You want your users to b
 to vote on submitted stories. Here's a sample story document with all the information
 required for voting:
 
-Here's a sample code block.
 <% code 'javascript' do %>
 {'_id': ObjectId("4bcc9e697e020f2d44471d27"),
  title: 'Aliens discovered on Mars!',
@@ -83,8 +82,8 @@ shouldn't be a concern.
 By contrast, the query in step 3 _can_ use a compound index efficiently:
 
 <% code 'javascript' do %>
-db.stories.ensureIndex({'_id': 1, voters: 1})l
+db.stories.ensureIndex({'_id': 1, voters: 1});
 <% end %>
 
-However, you'd create this index only if you expect people to be changing their votes often (which probably
+However, you'd create this index only if you expect people to be changing their votes often (which usually
 isn't the case).
