@@ -105,5 +105,5 @@ Now, if we query the tags collection, we find:
 
   [1]: http://www.mongodb.org/display/DOCS/Aggregation
   [2]: http://kylebanker.com/blog/2009/12/mongodb-map-reduce-basics/
-  [3]: www.snailinaturtleneck.com/blog/2010/03/15/mapreduce-the-fanfiction/
+  [3]: http://www.snailinaturtleneck.com/blog/2010/03/15/mapreduce-the-fanfiction/
 
