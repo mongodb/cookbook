@@ -67,12 +67,12 @@ db.posts.find({created_on: {$gt: start, $lt: end}});
 Again, this translates nicely to other languages - in Python it's:
 
 <% code 'python' do %>
-db.posts.find({"created_on": {"$gt": start, "$lt": end}})
+>>> db.posts.find({"created_on": {"$gt": start, "$lt": end}})
 <% end %>
 
 #### 3. Use an index for performance
 
-To make these queries fast we should use an index on the `created_on` field:
+To make these queries fast we can use an index on the `created_on` field:
 
 <% code 'javascript' do %>
 db.posts.ensureIndex({created_on: 1});
