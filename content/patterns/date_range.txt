@@ -61,13 +61,13 @@ get the matching documents, note the use of the special `$` operators,
 `$gte` (greater-than) and `$lt` (less-than):
 
 <% code 'javascript' do %>
-db.posts.find({created_on: {$gt: start, $lt: end}});
+db.posts.find({created_on: {$gte: start, $lt: end}});
 <% end %>
 
 Again, this translates nicely to other languages - in Python it's:
 
 <% code 'python' do %>
->>> db.posts.find({"created_on": {"$gt": start, "$lt": end}})
+>>> db.posts.find({"created_on": {"$gte": start, "$lt": end}})
 <% end %>
 
 #### 3. Use an index for performance
