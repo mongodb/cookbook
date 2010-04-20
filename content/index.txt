@@ -1,5 +1,5 @@
 ---
-title:       MongoDB Recipes
+title:       The MongoDB Cookbook
 created_at:  2008-08-02 14:06:40.000000 -06:00
 dirty: true
 filter:
@@ -10,18 +10,25 @@ filter:
 </p>
 
 <p>
-If you're just here to browse, see our recipes below.
+If you're new to MongoDB, be sure to check out:
 </p>
+<ul>
+  <li><a href="http://mongodb.org/">MongoDB Docs and Homepage</a></li>
+  <li><a href="http://www.mongodb.org/display/DOCS/Production+Deployments">MongoDB Production Deployments</a></li>
+</ul>
 
+<h2>Recipes</h2>
 <% ['patterns', 'operations'].each do |subject| %>
   <% articles = @pages.find(:all, :in_directory => subject, :recursive => true, :recipe => true) %>
 
-<h2><%= subject.capitalize %></h2>
+<h3><%= subject.capitalize %></h3>
 
 <ul>
 <% articles.each do |article| %>
   <li><%= link_to_page(article) %></li>
 <% end %>
 </ul>
-
 <% end %>
+
+<h2>Getting more help</h2>
+<p>Can find the answer you're looking for? Send a question to the <a href="http://groups.google.com/group/mongodb-user">MongoDB User List</a> or check out #mongodb on irc.freenode.net.</p>

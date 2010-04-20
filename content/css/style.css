@@ -2,6 +2,7 @@ body {
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 14px;
   margin: 0;
+  color: #303030;
 }
 
 a {
@@ -25,16 +26,14 @@ p {
 
 h1 {
   font-size: 30px;
-  color: #6686BD;
 }
 
 h2 {
-  font-size: 18px;
-  color: black;
+  font-size: 25px;
 }
 
 h3 {
-  font-size:14px;
+  font-size:18px;
 }
 
 h4 {
@@ -94,4 +93,28 @@ body pre {
 .large {
   font-size: 15px;
   line-height: 20px;
+}
+
+ul.breadcrumbs {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+}
+
+ul.breadcrumbs li {
+  float:left;
+  line-height:2em;
+  padding-right:.75em;
+}
+
+ul.breadcrumbs li a {
+  display: block;
+}
+
+.clearfix:after {
+    content: ".";
+    display: block;
+    height: 0;
+    clear: both;
+    visibility: hidden;
 }
