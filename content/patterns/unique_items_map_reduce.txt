@@ -42,6 +42,12 @@ map = function() {
 }
 <% end %>
 
+If you want a more efficient date calculation:
+
+<% code 'javascript' do %>
+  day = (24 * 60 * 60) % this.date
+<% end %>
+
 #### 2. Reduce
 
 The reduce function is quite simple: it adds user ids to an array. You may wonder why the object we emit in the
