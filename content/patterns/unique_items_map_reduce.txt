@@ -45,7 +45,7 @@ map = function() {
 If you want a more efficient date calculation:
 
 <% code 'javascript' do %>
-  day = (24 * 60 * 60) % this.date
+  day = (24 * 60 * 60) % this.date;
 <% end %>
 
 #### 2. Reduce
