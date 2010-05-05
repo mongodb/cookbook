@@ -29,94 +29,92 @@ the total number of user visits and along with the number of unique visits for t
 
 ### Solution
 
+What's tricky about this situation is that it requires a two-pass map-reduce in order to scale well.
+The first pass involves grouping by date and user id. This allows us to group by user and day and
+returns, as a side effect, the number of pageviews per user per day.
+
+#### 1. First Pass
+
+##### Map Step
+
 The only tricky part about the map function is making sure that we emit on the day. Since we're storing
 a full date, we need to parse out just the year, month, and date, and then emit on that value:
-
-#### 1. Map
 
 <% code 'javascript' do %>
 map = function() {
   day = Date.UTC(this.date.getFullYear(), this.date.getMonth(), this.date.getDate());
 
-  emit(day, {user_ids: [this.user_id]};
+  emit({day: day, user_id: this.user_id}, {count: 1});
 }
 <% end %>
 
-If you want a more efficient date calculation:
+If you want a more efficient date calculation, you can use this:
 
 <% code 'javascript' do %>
   day = (24 * 60 * 60) % this.date;
 <% end %>
 
-#### 2. Reduce
+##### Reduce Step
 
-The reduce function is quite simple: it adds user ids to an array. You may wonder why the object we emit in the
-map function consists of an array with just one user id. The reason for this is that the number of times that reduce
-is called is indeterminate, and therefore, the values emitted must be re-reducible.
+The reduce function is trivial, as it simply performs a count:
 
-What does this mean in practice? Simply that the object you emit must have the same structure as the object returned
-by the reduce function.
 
 <% code 'javascript' do %>
-reduce = function(key, values) {
-  var ids = [];
+reduce = "function(key, values) {
+  var count = 0;
 
   values.forEach(function(v) {
-   for(i in v.user_ids) {
-     ids.push(v.user_ids[i]);
-   }
+    count += v['count'];
   });
 
-  return {user_ids: ids};
-}
+  return {count: count};
+}"
 <% end %>
 
-#### 3. Finalize
+##### Run the command
 
-We could run map-reduce now, but the result would simply contain an array of user ids, duplicates included, for each day
-represented in the collection. Fortunately, we can calculate totals and uniques using a finalizer function:
+We run the mapReduce command, storing the output in the *pageview_results* collection:
 
 <% code 'javascript' do %>
-finalize = function(key, val) {
-  result       = {};
-  unique_ids   = {};
-  total_unique = 0;
-
-  val.user_ids.forEach(function(id) {
-    if(!unique_ids[id]) {
-      unique += 1;
-      unique_ids[id] = 1;
-    }
-  });
-
-  // Store the unique total and overall total in the _result_ object.
-  result.total = val.user_ids.length;
-  result.total_unique = unique;
-
-  return result;
-}
+db.pageviews.mapReduce(map, reduce, {out: pageview_results});
 <% end %>
 
-The finalizer is executed for each record in the map-reduce result collection; in this case, this means once per date.
-This finalizer counts the number of unique user ids and the total number of ids and then places those values in
-a new document, result, which the function returnes.
+#### 2. Second Pass
 
-Now that we have a finalizer, our map-reduce results collection will contain only totals.
+##### Map Step
 
-#### 4. Calling the `mapreduce` command
-
-Once we've defined these functions, we run the shell's mapReduce command:
+Now that we have a prelimiary set of results, we can do a second pass to count unique users by day.
+Here's the map function:
 
 <% code 'javascript' do %>
-db.pageviews.mapReduce(map, reduce, {finalize: finalizer, out: pageview_results});
+map = "function() {
+  emit(this['_id']['day'], {count: 1});
+}"
 <% end %>
 
-Since we've specified that the output collection should be called *pageview_results*, we can
+Because the first result set will store the *emit* key within an '_id' field, we have to reach into
+that object to get the date.
+
+##### Reduce Step
+
+It turns out that the same reduce function will work for the second pass; no need to rewrite.
+
+##### Running the command
+
+Now just run the mapReduce command on the result collection, and ouput to a new results collection.
+
+<% code 'javascript' do %>
+db.pageview_results.mapReduce(map, reduce, {out: pageview_results_unique});
+<% end %>
+
+Since we've specified that the output collection should be called *pageview_results_unique*, we can
 query that collection to see the results:
 
 <% code 'javascript' do %>
-db.pageview_results.find();
+db.pageview_results_unique.find();
 <% end %>
+
+That's all there is to it!
 
 #### 5. Limiting the Operation
 
@@ -127,7 +125,7 @@ for instance, if we just wanted results from the past two weeks, we could run:
 <% code 'javascript' do %>
 two_weeks_ago = new Date(Date.now() - 60 * 60 * 24 * 14 * 1000);
 db.pageviews.mapReduce(map, reduce,
-  {finalize: finalizer, out: pageview_results, query: {date: {'$gt': two_weeks_ago}}});
+  {out: pageview_results, query: {date: {'$gt': two_weeks_ago}}});
 <% end %>
 
 ### See Also
