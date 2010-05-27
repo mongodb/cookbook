@@ -19,7 +19,7 @@ If you're new to MongoDB, be sure to check out:
 
 <h2>Recipes</h2>
 <% ['patterns', 'operations'].each do |subject| %>
-  <% articles = @pages.find(:all, :in_directory => subject, :recursive => true, :recipe => true) %>
+  <% articles = @pages.find(:all, :in_directory => subject, :recursive => true, :recipe => true, :sort_by => 'title') %>
 
 <h3><%= subject.capitalize %></h3>
 
