@@ -1,8 +1,8 @@
 ---
-title:      Finding Max And Min Values of a property
+title:      Finding Max And Min Values with Versioned Documents
 created_at: 2010-05-24 20:16:24.036546 -05:00
 recipe: true
-author: [Amos King]: http://dirtyinformation.com
+author: Amos King
 description: How to use MapReduce to find max/min values for a given set and property
 filter:
   - erb
@@ -17,7 +17,7 @@ that is a version of:
 
 <% code 'javascript' do %>
 {
-    "document_id" : "mongoDB How To",
+    "document_id" : "mongoDB How-To",
     "author" : "Amos King",
     "content" : "...",
     "version" : 1.0
@@ -39,8 +39,7 @@ then use the reduce function to find the max version.
 
 #### 1. Map
 
-The map function is very simple.  We use our common element between all versions as the key and
-the version as the value:
+The map function is very simple.  We use our common element between all versions as the key and the version as the value:
 
 <% code 'javascript' do %>
 map = function () {
@@ -53,9 +52,9 @@ map = function () {
 The reduce function is also very simple but has a little bit of javascript magic.
 Math.max normally takes in any number of arguments(ie. Math.max(1,2,3) ), but we
 need to call it with an array. So we call Math.max with apply so that we can pass
-in and array of values to max.  The apply breaks the array into individual arguments
+in an array of values to max.  The apply breaks the array into individual arguments
 to pass to Math.max.  The first argument to apply is the context in which we want to
-run, Math will do fine here.
+run; Math will do fine here.
 
 <% code 'javascript' do %>
 reduce = function (key, values) {
@@ -67,8 +66,7 @@ Finding the minimum value is as easy as replacing Math.max with Math.min.
 
 #### 3. Call the `mapreduce` command
 
-Now it is time to get our result set. We will set the out parameter to newest_versions so we
-will have an appropriately named set to work with:
+Now it's time to get our result set. We'll set the output collection name parameter to 'newest_versions' so that we'll have an appropriately named set to work with:
 
 <% code 'javascript' do %>
 > result = db.runCommand({
@@ -78,7 +76,7 @@ will have an appropriately named set to work with:
 ... "out" : "newest_versions"})
 <% end %>
 
-Now, we query the newest_versions collection and each value is exactly what we are looking for:
+Now, we query the 'newest_versions' collection. Each document is exactly what we're looking for:
 
 <% code 'javascript' do %>
 > db.newest_versions.find()
