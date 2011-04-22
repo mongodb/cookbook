@@ -71,9 +71,9 @@ reduce = function (key, values) {
 <% end %>
 
 #### 3. Call the `mapreduce` command
-
+<% code 'javascript' do%>
 db.posts.mapReduce( map , reduce , { out : { inline : true } } )
-
+<% end %>
 ### See Also
 
 * The MongoDB [docs on mapreduce][1]
