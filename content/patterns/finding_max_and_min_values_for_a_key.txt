@@ -1,0 +1,81 @@
+---
+title:      Finding Max And Min Values for a given Key
+created_at: 2010-05-24 20:16:24.036546 -05:00
+recipe: true
+author: Eliot Horowitz
+description: How to use MapReduce to find the min and max values for a given key
+filter:
+  - erb
+  - markdown
+---
+
+### Problem
+
+You want to find the min and max value for a given field per key.
+
+<% code 'javascript' do %>
+{
+    "_id" : "post 1",
+    "author" : "Bob",
+    "content" : "...",
+    "page_views" : 5
+}
+{
+    "_id" : "post 2",
+    "author" : "Bob",
+    "content" : "...",
+    "page_views" : 9
+}
+{
+    "_id" : "post 3",
+    "author" : "Bob",
+    "content" : "...",
+    "page_views" : 8
+}
+<% end %>
+
+We want to end up with a collection of authors and their least and most popular posts:
+
+<% code 'javascript' do %>
+{ _id    : "Bob", 
+   value : { min : { page_views : 5 , _id : "post 1" } , 
+             max : { page_views , 9 , _id : "post 3" } } }
+<% end %>
+
+### Solution
+
+Use the `mapreduce` database command.  Emit each document_id and version in the map function,
+then use the reduce function to find the max version.
+
+#### 1. Map
+
+<% code 'javascript' do %>
+map = function () {
+    var x = { page_views : this.page_views , _id : this._id };
+    emit(this.author, { min : x , max : x } )
+}
+<% end %>
+
+#### 2. Reduce
+<% code 'javascript' do %>
+reduce = function (key, values) {
+    var res = values[0];
+    for ( var i=1; i<values.length; i++ ) {
+        if ( values[i].min.page_views < res.min.page_views ) 
+           res.min = values[i].min;
+        if ( values[i].max.page_views > res.max.page_views ) 
+           res.max = values[i].max;
+    }
+    return res;
+}
+<% end %>
+
+#### 3. Call the `mapreduce` command
+
+db.posts.mapReduce( map , reduce , { out : { inline : true } } )
+
+### See Also
+
+* The MongoDB [docs on mapreduce][1]
+
+  [1]: http://www.mongodb.org/display/DOCS/MapReduce
