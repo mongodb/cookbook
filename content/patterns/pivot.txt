@@ -1,0 +1,89 @@
+---
+title:      Pivot Data with Map reduce
+created_at: 2011-05-06 18:0:024.036546 -04:00
+author: "Gaetan VoyerPerrault"
+description: How to use mapreduce to pivot table data.
+recipe: true
+filter:
+  - erb
+  - markdown
+---
+
+### Problem
+
+You want to give your users the ability to vote on things. Whether it's articles,
+comments, photos, or tweets, it seems like everything needs voteability.
+
+* Make sure that each user gets just one vote.
+* Keep a counter cache on the number of votes.
+
+### Solution
+
+The solution is provided in JavaScript; translating to the language of your choice
+should be pretty straightforward.
+
+#### 1. Store the vote information in the object itself.
+
+Let's say you're building a social news site like Digg. You want your users to be able
+to vote on submitted stories. Here's a sample story document with all the information
+required for voting:
+
+<% code 'javascript' do %>
+{'_id': ObjectId("4bcc9e697e020f2d44471d27"),
+ title: 'Aliens discovered on Mars!',
+ description: 'Martian'
+ vote_count: 0,
+ voters: []
+}
+<% end %>
+
+Notice that we've reserved two fields for voting: the first is an integer caching the number of votes,
+and the second is a list of voters.
+
+#### 2. Use an atomic update operation for adding and removing votes.
+
+Here you get to see what's great about atomic operators. You can reliably add the vote, without
+risking a duplicate, in a single operation. Here's the code to update the story above:
+
+<% code 'javascript' do %>
+// Get the user id who's voting
+user_id = ObjectId("4bcc9e697e020f2d44471a15");
+
+// This query succeeds only if the voters array doesn't contain the user
+query   = {_id: ObjectId("4bcc9e697e020f2d44471d27"), voters: {'$ne': user_id});
+
+// Update to add the user to the array and increment the number of votes.
+update  = {'$push': {'voters': user_id}, '$inc': {vote_count: 1}}
+
+db.stories.update(query, update);
+<% end %>
+
+#### 3. If you want to allow users to retract their votes, the code is quite simiar:
+
+The only difference is that we use the **$pull** operator, and we decrement by passing
+-1 to **$inc**.
+
+<% code 'javascript' do %>
+// This query succeeds when the voter has already voted on the story.
+query   = {_id: ObjectId("4bcc9e697e020f2d44471d27"), voters: user_id};
+
+// Update to remove the user from the array and decrement the number of votes.
+update  = {'$pull': {'voters': user_id}, '$inc': {vote_count: -1}}
+
+db.stories.update(query, update);
+<% end %>
+
+### Discussion
+
+One thing to note is that because the operation of step 2 uses the **$ne** operator, that part of the query
+can't use an index. This may become a problem if you expect many hundreds of votes per story; any fewer
+shouldn't be a concern.
+
+By contrast, the query in step 3 _can_ use a compound index efficiently:
+
+<% code 'javascript' do %>
+db.stories.ensureIndex({'_id': 1, voters: 1});
+<% end %>
+
+However, you'd create this index only if you expect people to be changing their votes often (which usually
+isn't the case).
