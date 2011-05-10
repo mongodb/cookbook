@@ -1,4 +1,4 @@
-﻿---
+---
 title:      Pivot Data with Map reduce
 created_at: 2011-05-05 18:0:024.036546 -04:00
 recipe: true
@@ -31,21 +31,21 @@ The catch here is in the reduce phase. We cannot emit an array from the reduce p
 #### The code
 
 <% code 'javascript' do %>
-	map = function() {
-	  for(var i in this.movies){
-		key = { movie: this.movies[i] };
-		value = { actors: [ this.actor ] };
-		emit(key, value);
-	  }
-	}
+map = function() {
+  for(var i in this.movies){
+	key = { movie: this.movies[i] };
+	value = { actors: [ this.actor ] };
+	emit(key, value);
+  }
+}
 
-	reduce = function(key, values) {
-	  actor_list = { actors: [] };
-	  for(var i in values) {
-		actor_list.actors = values[i].actors.concat(actor_list.actors);
-	  }
-	  return actor_list;
-	}
+reduce = function(key, values) {
+  actor_list = { actors: [] };
+  for(var i in values) {
+	actor_list.actors = values[i].actors.concat(actor_list.actors);
+  }
+  return actor_list;
+}
 <% end %>
 
 Notice how actor_list is actually a javascript object that contains an array. Also notice that map emits the same structure.
