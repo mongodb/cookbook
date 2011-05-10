@@ -50,25 +50,21 @@ The catch here is in the reduce phase. We cannot emit an array from the reduce p
 
 Notice how actor_list is actually a javascript object that contains an array. Also notice that map emits the same structure.
 
-Run the following to execute the command and print the result:
+Run the following to execute the map / reduce, output it to the "pivot" collection and print the result:
 
 <% code 'javascript' do %>
-  printjson(db.foo.mapReduce(map, reduce, "pivot"));
+  printjson(db.actors.mapReduce(map, reduce, "pivot"));
   db.pivot.find().forEach(printjson);
 <% end %>
 
-##### Reduce Step
-
-The reduce function is trivial, as it simply performs a count:
+Here is the sample output, note that "Pretty Woman" and "Runaway Bride" have both "Richard Gere" and "Julia Roberts".
 
 <% code 'javascript' do %>
-reduce = "function(key, values) {
-  var count = 0;
 
-  values.forEach(function(v) {
-    count += v['count'];
-  });
+{ "_id" : { "movie" : "Chicago" }, "value" : { "actors" : [ "Richard Gere" ] } }
+{ "_id" : { "movie" : "Erin Brockovich" }, "value" : { "actors" : [ "Julia Roberts" ] } }
+{ "_id" : { "movie" : "Pretty Woman" }, "value" : { "actors" : [ "Richard Gere", "Julia Roberts" ] } }
+{ "_id" : { "movie" : "Runaway Bride" }, "value" : { "actors" : [ "Richard Gere", "Julia Roberts" ] } }
+<% end $>
 
-  return {count: count};
-}"
-<% end %>
+
