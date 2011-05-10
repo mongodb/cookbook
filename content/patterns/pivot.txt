@@ -1,9 +1,9 @@
----
+﻿---
 title:      Pivot Data with Map reduce
-created_at: 2011-05-06 18:0:024.036546 -04:00
-author: "Gaetan VoyerPerrault"
-description: How to use mapreduce to pivot table data.
+created_at: 2011-05-05 18:0:024.036546 -04:00
 recipe: true
+author: Gaetan Voyer-Perrault
+description: How to use map-reduce to pivot table data.
 filter:
   - erb
   - markdown
@@ -31,44 +31,40 @@ The catch here is in the reduce phase. We cannot emit an array from the reduce p
 #### The code
 
 <% code 'javascript' do %>
-       map = function() {
-         for(var i in this.movies){
-           key = { movie: this.movies[i] };
-           value = { actors: [ this.actor ] };
-           emit(key, value);
-         }
-       }
+	map = function() {
+	  for(var i in this.movies){
+		key = { movie: this.movies[i] };
+		value = { actors: [ this.actor ] };
+		emit(key, value);
+	  }
+	}
 
-       reduce = function(key, values) {
-         actor_list = { actors: [] };
-         for(var i in values) {
-            actor_list.actors = values[i].actors.concat(actor_list.actors);
-         }
-         return actor_list;
-       }
+	reduce = function(key, values) {
+	  actor_list = { actors: [] };
+	  for(var i in values) {
+		actor_list.actors = values[i].actors.concat(actor_list.actors);
+	  }
+	  return actor_list;
+	}
 <% end %>
 
 Notice how actor_list is actually a javascript object that contains an array. Also notice that map emits the same structure.
 
-Run the following to execute the command and print the result:
+Run the following to execute the map / reduce, output it to the "pivot" collection and print the result:
 
 <% code 'javascript' do %>
-  printjson(db.foo.mapReduce(map, reduce, "pivot"));
+  printjson(db.actors.mapReduce(map, reduce, "pivot"));
   db.pivot.find().forEach(printjson);
 <% end %>
 
-##### Reduce Step
-
-The reduce function is trivial, as it simply performs a count:
+Here is the sample output, note that "Pretty Woman" and "Runaway Bride" have both "Richard Gere" and "Julia Roberts".
 
 <% code 'javascript' do %>
-reduce = "function(key, values) {
-  var count = 0;
 
-  values.forEach(function(v) {
-    count += v['count'];
-  });
+{ "_id" : { "movie" : "Chicago" }, "value" : { "actors" : [ "Richard Gere" ] } }
+{ "_id" : { "movie" : "Erin Brockovich" }, "value" : { "actors" : [ "Julia Roberts" ] } }
+{ "_id" : { "movie" : "Pretty Woman" }, "value" : { "actors" : [ "Richard Gere", "Julia Roberts" ] } }
+{ "_id" : { "movie" : "Runaway Bride" }, "value" : { "actors" : [ "Richard Gere", "Julia Roberts" ] } }
+<% end $>
 
-  return {count: count};
-}"
-<% end %>
+
