@@ -59,12 +59,7 @@ Run the following to execute the map / reduce, output it to the "pivot" collecti
 
 Here is the sample output, note that "Pretty Woman" and "Runaway Bride" have both "Richard Gere" and "Julia Roberts".
 
-<% code 'javascript' do %>
-
-{ "_id" : { "movie" : "Chicago" }, "value" : { "actors" : [ "Richard Gere" ] } }
-{ "_id" : { "movie" : "Erin Brockovich" }, "value" : { "actors" : [ "Julia Roberts" ] } }
-{ "_id" : { "movie" : "Pretty Woman" }, "value" : { "actors" : [ "Richard Gere", "Julia Roberts" ] } }
-{ "_id" : { "movie" : "Runaway Bride" }, "value" : { "actors" : [ "Richard Gere", "Julia Roberts" ] } }
-<% end $>
-
-
+    { "_id" : { "movie" : "Chicago" }, "value" : { "actors" : [ "Richard Gere" ] } }
+    { "_id" : { "movie" : "Erin Brockovich" }, "value" : { "actors" : [ "Julia Roberts" ] } }
+    { "_id" : { "movie" : "Pretty Woman" }, "value" : { "actors" : [ "Richard Gere", "Julia Roberts" ] } }
+    { "_id" : { "movie" : "Runaway Bride" }, "value" : { "actors" : [ "Richard Gere", "Julia Roberts" ] } }
