@@ -7,6 +7,7 @@ description: How to use MapReduce to find max/min values for a given set and pro
 filter:
   - erb
   - markdown
+Modified by Marc on 11/4/11
 ---
 
 ### Problem
@@ -87,19 +88,91 @@ Now, we query the 'newest_versions' collection. Each document is exactly what we
 
 ### Extras
 
-Grabbing the actual documents is just as easy.  We only need a finalize function:
+The Map and Reduce Functions can be rewritten slightly to return the Maximum and Minimum versions of each document.  
+
+For the purpose of this example, the input collection is as follows: (The _id values have been truncated for brevity.)
 
 <% code 'javascript' do %>
-fin = function(key, value) {
-  return db.oplan.findOne({id:key, version:value});
+> db.documents.find()
+{ "_id" : 1, "document_id" : "mongoDB How-To", "author" : "Amos King", "content" : "...", "version" : 1 }
+{ "_id" : 2, "document_id" : "mongoDB How-To", "author" : "Amos King", "content" : "...", "version" : 1.1 }
+{ "_id" : 3, "document_id" : "Resume", "author" : "Author", "content" : "...", "version" : 6 }
+{ "_id" : 4, "document_id" : "Schema", "author" : "Someone Else", "content" : "...", "version" : 0.9 }
+{ "_id" : 5, "document_id" : "Schema", "author" : "Someone Else", "content" : "...", "version" : 1 }
+> 
+<% end %>
+
+#### Map
+
+The new Map function emits documents containing the document_id, and "value" key containing a list of embedded documents, each containing the keys, "max" and "min".  Both keys are initially set to be equal to the "version" key of the current document.  Because there is only one document containing the "document_id" : "Resume", this output will not need to be reduced.  
+
+<% code 'javascript' do %>
+map = function () { 
+    emit(this.document_id, {max:this.version, min:this.version}); 
 }
 <% end %>
 
-Then we call our mapReduce again with a finalize option set to that function
-(Called using the mapReduce function just to show another way to use mapreduce):
+The Map function will emit something that looks like the following:
 
 <% code 'javascript' do %>
-db.documents.mapReduce(map,reduce, {out:'newest_versions', finalize:fin});
+"mongoDB How-To", { "max" : 1, "min" : 1 }
+"mongoDB How-To", { "max" : 1.1, "min" : 1.1 }
+"Resume", { "max" : 6, "min" : 6 }
+"Schema", { "max" : 0.9, "min" : 0.9 }
+"Schema", { "max" : 1, "min" : 1 }
+<% end %>
+
+#### Reduce
+
+Next the Reduce function will be run to compress the data emit by the Map function.  The Reduce function requires an input of an id, and a list of values.  It must output an id and a single value, which in this case is a document containing the keys, "max" and "min".  The reduce function will interpret the data that has been emitted from the Map function as follows:
+
+<% code 'javascript' do %>
+"mongoDB How-To", [{ "max" : 1, "min" : 1 }, { "max" : 1.1, "min" : 1.1 }]
+"Schema", [{ "max" : 0.9, "min" : 0.9 }, { "max" : 1, "min" : 1 }]
+<% end %>
+
+The Reduce function will be run repeatedly, passing its previous output value as the new input, until the output list contains only one value.  
+
+Notice that the id "Resume" is not passed to the Reduce function, because it only has one value associated with it.  This reduce function will find the maximum "max" value, and the minimum "min" value for each key.  It will be run twice; once for the id "Schema", and once for the id "mongoDB How-To".
+
+<% code 'javascript' do %>
+reduce = function (key, values) {
+  max = values[0].max;
+	min = values[0].min;
+	if (values.length > 1){
+		for(i in values){
+			if(values[i].max > max){
+				max = values[i].max;
+			};
+			if(values[i].min < min){
+				min = values[i].min;
+			};
+		};
+	};
+	return {"max":max, "min":min};
+	}
+}
+<% end %>
+
+Running mapreduce will return the following:
+
+<% code 'javascript' do %>
+> result = db.runCommand({"mapreduce" : "documents","map" : map,"reduce" : reduce,"out" : "newest_versions"})
+{
+	"result" : "newest_versions",
+	"timeMillis" : 2,
+	"counts" : {
+		"input" : 5,
+		"emit" : 5,
+		"reduce" : 2,
+		"output" : 3
+	},
+	"ok" : 1
+}
+> db.newest_versions.find()
+{ "_id" : "Resume", "value" : { "max" : 6, "min" : 6 } }
+{ "_id" : "Schema", "value" : { "max" : 1, "min" : 0.9 } }
+{ "_id" : "mongoDB How-To", "value" : { "max" : 1.1, "min" : 1 } }
 <% end %>
 
 ### See Also
