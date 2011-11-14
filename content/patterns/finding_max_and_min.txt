@@ -7,7 +7,6 @@ description: How to use MapReduce to find max/min values for a given set and pro
 filter:
   - erb
   - markdown
-Modified by Marc on 11/4/11
 ---
 
 ### Problem
