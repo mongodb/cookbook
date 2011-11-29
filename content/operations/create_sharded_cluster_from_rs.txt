@@ -111,6 +111,8 @@ PRIMARY>
 $ bin/mongod --configsvr --dbpath /data/example/config --port 20000
 <% end %>
 
+NOTE:  Because this example is set up in a testing environment on localhost, one config server will suffice.  In a production setup three config servers should be used, each process running on a different machine.  
+
 #### 2.3) Start mongos in a new terminal
 
 NOTE:  If you are using the dummy collection from step 0 and are just experimenting with sharding, you can use a small --chunkSize (1MB works well).  This way it will not be necessary to insert 64MB worth of documents before the Balancer starts to move them around.  This should not be used for production.  
@@ -119,7 +121,11 @@ NOTE:  If you are using the dummy collection from step 0 and are just experiment
 $ bin/mongos --configdb localhost:20000 --port 27017 [--chunkSize 1]
 <% end %>
 
-NOTE:  localhost:20000 is the host port for the config server, not mongos.  mongos will be running on port 27017
+NOTE:  localhost:20000 is the host port for the config server, not mongos.  mongos will be running on port 27017.  As mentioned above, because this is a test environment, only a single configdb is used.  If there were three config servers, mongos would be started like so:
+
+<% code 'javascript' do %>
+$ bin/mongos --configdb hosta,hostb,hostc --port 27017
+<% end %>
 
 #### 2.4) In a new terminal, connect to the mongos process, and add the first shard:
 
