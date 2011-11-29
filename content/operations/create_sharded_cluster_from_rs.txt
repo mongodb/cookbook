@@ -1,0 +1,289 @@
+---
+title: How to turn a six member replica set into a sharded cluster composed of two three-member replica sets
+created_at: 2011-11-29
+recipe: true
+author: Marc Bastien
+description: How to turn a six member replica set into a sharded cluster composed of two three-member replica sets.
+---
+
+### Outline
+
+0) Set up the replica set (if one does not exist already)
+1) Shrink the replica set from six nodes to three
+2) Start the config server and create a cluster with one shard
+3) Create a second replica set with the remaining 3 mongods
+4) Add the second replica set to the sharded cluster
+5) Enable sharding on the desired collection(s)
+
+### 0) Set up 6 node replica set and create some dummy data
+
+For the purpose of this example, I created a 6 member replica set and generated a test collection with some dummy data.
+
+#### 0.1) Create the necessary directories.  In this example, the directories are /data/example/node1, /data/example/node2, /data/example/node3, /data/example/node4, /data/example/node5, and /data/example/node6
+
+#### 0.2) Start 6 instances of mongod in six terminal windows
+
+<% code 'javascript' do %>
+$ bin/mongod --dbpath /data/example/node1 --port 10001 --replSet myset/localhost:10002 --rest
+<% end %>
+
+<% code 'javascript' do %>
+$ bin/mongod --dbpath /data/example/node2 --port 10002 --replSet myset/localhost:10001 --rest
+<% end %>
+
+<% code 'javascript' do %>
+$ bin/mongod --dbpath /data/example/node3 --port 10003 --replSet myset/localhost:10001 --rest
+<% end %>
+
+<% code 'javascript' do %>
+$ bin/mongod --dbpath /data/example/node4 --port 10004 --replSet myset/localhost:10001 --rest
+<% end %>
+
+<% code 'javascript' do %>
+$ bin/mongod --dbpath /data/example/node5 --port 10005 --replSet myset/localhost:10001 --rest
+<% end %>
+
+<% code 'javascript' do %>
+$ bin/mongod --dbpath /data/example/node6 --port 10006 --replSet myset/localhost:10001 --rest
+<% end %>
+
+#### 0.3) In a new terminal window, connect to one of the servers
+
+<% code 'javascript' do %>
+$ bin/mongo localhost:10001/admin
+<% end %>
+
+#### 0.4) Initialize the set
+
+<% code 'javascript' do %>
+> db.runCommand({"replSetInitiate" : {"_id" : "myset", "members" : [{"_id" : 1, "host" : "localhost:10001"}, {"_id" : 2, "host" : "localhost:10002"}, {"_id" : 3, "host" : "localhost:10003"}, {"_id" : 4, "host" : "localhost:10004"}, {"_id" : 5, "host" : "localhost:10005"}, {"_id" : 6, "host" : "localhost:10006"}]}})
+{
+	"info" : "Config now saved locally.  Should come online in about a minute.",
+	"ok" : 1
+}
+<% end %>
+
+#### 0.5) Create a collection with some dummy data in it:
+
+This little JavaScript program will write one million documents to the collection "test_collection" of the form:
+<% code 'javascript' do %>
+{ "_id" : ObjectId("4ed5420b8fc1dd1df5886f70"), "name" : "Greg", "user_id" : 4, "boolean" : true, "added_at" : ISODate("2011-11-29T20:35:23.121Z"), "randInt" : 74 }
+<% end %>
+
+<% code 'javascript' do %>
+people = ["Marc", "Bill", "George", "Eliot", "Matt", "Trey", "Tracy", "Greg", "Steve", "Kristina", "Katie", "Jeff"]
+for(var i=0; i<10000000; i++){
+     name = people[Math.floor(Math.random()*people.length)];
+     user_id = i;
+     boolean = [true, false][Math.floor(Math.random()*2)];
+     added_at = new Date();
+     randInt = Math.floor(Math.random()*101);
+     db.test_collection.save({"name":name, "user_id":user_id, "boolean": boolean, "added_at":added_at, "randInt":randInt });
+}
+<% end %>
+
+### 1) Shrink the replica set from six nodes to three
+
+If you created the dummy collection in step 0, then you should already be connected to the Primary node.  If you skipped this step, then connect to the Primary node with the JS Shell.
+
+<% code 'javascript' do %>
+$ bin/mongo localhost:10001/admin
+MongoDB shell version: 2.0.2-rc1
+connecting to: localhost:10001/admin
+PRIMARY> use admin
+switched to db admin
+PRIMARY> rs.remove("localhost:10006")
+{ "ok" : 1 }
+PRIMARY> rs.remove("localhost:10005")
+{ "ok" : 1 }
+PRIMARY> rs.remove("localhost:10004")
+{ "ok" : 1 }
+PRIMARY> 
+<% end %>
+
+### 2) Start the config server and create a cluster with one shard
+
+#### 2.1) Create the config directory: /data/example/config
+
+#### 2.2) Start the config server
+
+<% code 'javascript' do %>
+$ bin/mongod --configsvr --dbpath /data/example/config --port 20000
+<% end %>
+
+#### 2.3) Start mongos in a new terminal
+
+NOTE:  If you are using the dummy collection from step 0 and are just experimenting with sharding, you can use a small --chunkSize (1MB works well).  This way it will not be necessary to insert 64MB worth of documents before the Balancer starts to move them around.  This should not be used for production.  
+
+<% code 'javascript' do %>
+$ bin/mongos --configdb localhost:20000 --port 27017 [--chunkSize 1]
+<% end %>
+
+NOTE:  localhost:20000 is the host port for the config server, not mongos.  mongos will be running on port 27017
+
+#### 2.4) In a new terminal, connect to the mongos process, and add the first shard:
+
+<% code 'javascript' do %>
+$ bin/mongo localhost:27017/admin
+MongoDB shell version: 2.0.2-rc1
+connecting to: localhost:27017/admin
+mongos> db.runCommand( { addshard : "myset/localhost:10001,localhost:10002,localhost:10003" } )
+{ "shardAdded" : "myset", "ok" : 1 }
+mongos> 
+<% end %>
+
+### 3) Create a second replica set with the remaining 3 mongod processes
+
+#### 3.1) Stop the mongod processess (if they have not been stopped already), and restart them as standalone instances.  Connect to each and remove the local and test dbs.  
+
+In the terminal window of the mongod instance that was connected to node4 (localhost:10004):
+<% code 'javascript' do %>
+$ bin/mongod --dbpath /data/example/node4 --port 10004 --rest
+<% end %>
+
+In a new terminal window:
+<% code 'javascript' do %>
+$ bin/mongo localhost:10004/admin
+MongoDB shell version: 2.0.2-rc1
+connecting to: localhost:10004/admin
+> use local
+switched to db local
+> db.dropDatabase()
+{ "dropped" : "local", "ok" : 1 }
+> use test
+switched to db test
+> db.dropDatabase()
+{ "dropped" : "test", "ok" : 1 }
+<% end %>
+
+In the terminal window of the mongod instance that was connected to node5 (localhost:10005):
+<% code 'javascript' do %>
+$ bin/mongod --dbpath /data/example/node5 --port 10005 --rest
+<% end %>
+
+In a different terminal window:
+<% code 'javascript' do %>
+$ bin/mongo localhost:10005/admin
+MongoDB shell version: 2.0.2-rc1
+connecting to: localhost:10005/admin
+> use local
+switched to db local
+> db.dropDatabase()
+{ "dropped" : "local", "ok" : 1 }
+> use test
+switched to db test
+> db.dropDatabase()
+{ "dropped" : "test", "ok" : 1 }
+<% end %>
+
+In the terminal window of the mongod instance that was connected to node6 (localhost:10006):
+<% code 'javascript' do %>
+$ bin/mongod --dbpath /data/example/node4 --port 10006 --rest
+<% end %>
+
+In a different terminal window:
+<% code 'javascript' do %>
+$ bin/mongo localhost:10006/admin
+MongoDB shell version: 2.0.2-rc1
+connecting to: localhost:10006/admin
+> use local
+switched to db local
+> db.dropDatabase()
+{ "dropped" : "local", "ok" : 1 }
+> use test
+switched to db test
+> db.dropDatabase()
+{ "dropped" : "test", "ok" : 1 }
+<% end %>
+
+#### 3.2) Now restart each mongod instance (4, 5, and 6) as part of a second replica set:
+
+In the terminal window of the mongod instance that was connected to node4 (localhost:10004):
+<% code 'javascript' do %>
+$ bin/mongod --dbpath /data/example/node4 --port 10004 --replSet myset2/localhost:10005 --rest
+<% end %>
+
+In the terminal window of the mongod instance that was connected to node5 (localhost:10005):
+<% code 'javascript' do %>
+$ bin/mongod --dbpath /data/example/node5 --port 10005 --replSet myset2/localhost:10004 --rest
+<% end %>
+
+In the terminal window of the mongod instance that was connected to node6 (localhost:10006):
+<% code 'javascript' do %>
+$ bin/mongod --dbpath /data/example/node6 --port 10006 --replSet myset2/localhost:10004 --rest
+<% end %>
+
+#### 3.3) In a new terminal window, connect to one member of the new replica set
+
+<% code 'javascript' do %>
+$ bin/mongo localhost:10004/admin
+MongoDB shell version: 2.0.2-rc1
+connecting to: localhost:10004/admin
+<% end %>
+
+#### 3.4) Initialize the set
+
+<% code 'javascript' do %>
+> db.runCommand({"replSetInitiate" : {"_id" : "myset2", "members" : [{"_id" : 1, "host" : "localhost:10004"}, {"_id" : 2, "host" : "localhost:10005"}, {"_id" : 3, "host" : "localhost:10006"}]}})
+{
+	"info" : "Config now saved locally.  Should come online in about a minute.",
+	"ok" : 1
+}
+<% end %>
+
+### 4) Add the second replica set to the sharded cluster
+
+In the mongos terminal window:
+<% code 'javascript' do %>
+mongos> use admin
+switched to db admin
+mongos> db.runCommand( { addshard : "myset2/localhost:10004,localhost:10005,localhost:10006" } )
+{ "shardAdded" : "myset2", "ok" : 1 }
+<% end %>
+
+You can verify that the two shards are set up properly by running the listshards command:
+<% code 'javascript' do %>
+mongos> db.runCommand({listshards:1})
+{
+	"shards" : [
+		{
+			"_id" : "myset",
+			"host" : "myset/localhost:10001,localhost:10003,localhost:10002"
+		},
+		{
+			"_id" : "myset2",
+			"host" : "myset2/localhost:10004,localhost:10006,localhost:10005"
+		}
+	],
+	"ok" : 1
+}
+<% end %>
+
+### 5) Enable sharding on the collection(s) in question.  
+
+#### 5.1) Enabling Sharding on the Database:
+
+<% code 'javascript' do %>
+mongos> db.runCommand( { enablesharding : "test" } )
+{ "ok" : 1 }
+<% end %>
+
+#### 5.2) Create an index on the desired shard key, if it does not already exist:
+
+<% code 'javascript' do %>
+mongos> use test
+switched to db test
+mongos> db.test_collection.ensureIndex({name:1})
+<% end %>
+
+#### 5.3) Shard the desired collection(s)
+
+<% code 'javascript' do %>
+mongos> use admin
+switched to db admin
+mongos> db.runCommand( { shardcollection : "test.test_collection", key : {"name":1} });
+{ "collectionsharded" : "test.test_collection", "ok" : 1 }
+mongos> 
+<% end %>
+
+The collection "test_collection" is now sharded.  You can confirm this by switching to the test database and running db.stats() or db.printShardingStatus()
