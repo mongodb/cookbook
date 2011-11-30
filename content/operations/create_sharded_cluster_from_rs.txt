@@ -3,6 +3,9 @@ title: How to expand a three member replica set into a sharded cluster composed 
 created_at: 2011-11-30
 recipe: true
 author: Marc Bastien
+filter:
+  - erb
+  - markdown
 ---
 
 ### Outline
