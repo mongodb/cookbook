@@ -1,9 +1,8 @@
 ---
 title: How to expand a three member replica set into a sharded cluster composed of two three-member replica sets
-created_at: 2011-11-29
+created_at: 2011-11-30
 recipe: true
 author: Marc Bastien
-description: How to turn a six member replica set into a sharded cluster composed of two three-member replica sets.
 ---
 
 ### Outline
@@ -13,14 +12,12 @@ In this example, we will start with a single replica set containing three nodes 
 Here is the order of operations:
 
 0) Set up the three member replica set (if one does not exist already) and create a dummy collection
-1) Start the config server and create a cluster with one shard
+1) Start the config servers and create a cluster with one shard
 2) Create a second replica set with three new mongod processess
 3) Add the second replica set to the sharded cluster
 4) Enable sharding on the desired collection(s)
 
 ### 0) Set up a three member replica set and create some dummy data
-
-For the purpose of this example, I created a three member replica set and generated a test collection with some dummy data.  
 
 #### 0.1) Create the necessary directories.  In this example, the directories are /data/example/node1, /data/example/node2, and /data/example/node3
 
@@ -63,7 +60,7 @@ connecting to: localhost:10001/admin
 
 This little JavaScript program will write one million documents to the collection "test_collection" of the form:
 <% code 'javascript' do %>
-{ "_id" : ObjectId("4ed5420b8fc1dd1df5886f70"), "name" : "Greg", "user_id" : 4, "boolean" : true, "added_at" : ISODate("2011-11-29T20:35:23.121Z"), "randInt" : 74 }
+{ "_id" : ObjectId("4ed5420b8fc1dd1df5886f70"), "name" : "Greg", "user_id" : 4, "boolean" : true, "added_at" : ISODate("2011-11-29T20:35:23.121Z"), "number" : 74 }
 <% end %>
 
 <% code 'javascript' do %>
@@ -112,7 +109,7 @@ NOTE:  If you are using the dummy collection from step 0 and are just experiment
 
 Additionally, localhost:20000 is the address and host port of the config server, not the mongos process.  In the above example, mongos will be running on port 27017.  27017 is the default port for mongo, so --port 27017 may be omitted.  It has been included here only as an example.  
 
-#### 1.4) In a new terminal, connect to the mongos process, and add the first shard:
+#### 1.4) In a new terminal, connect to the mongos process and add the first shard:
 
 <% code 'javascript' do %>
 $ bin/mongo localhost:27017/admin
@@ -192,7 +189,7 @@ mongos> db.runCommand({listshards:1})
 
 ### 4) Enable sharding on the collection(s) in question.  
 
-#### 4.1) Enabling Sharding on the Database
+#### 4.1) Enabling sharding on the database
 
 <% code 'javascript' do %>
 mongos> db.runCommand( { enablesharding : "test" } )
