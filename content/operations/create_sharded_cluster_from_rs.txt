@@ -67,10 +67,10 @@ This little JavaScript program will write one million documents to the collectio
 <% end %>
 
 <% code 'javascript' do %>
-> use test
+PRIMARY> use test
 switched to db test
-> people = ["Marc", "Bill", "George", "Eliot", "Matt", "Trey", "Tracy", "Greg", "Steve", "Kristina", "Katie", "Jeff"];
-> for(var i=0; i<1000000; i++){
+PRIMARY> people = ["Marc", "Bill", "George", "Eliot", "Matt", "Trey", "Tracy", "Greg", "Steve", "Kristina", "Katie", "Jeff"];
+PRIMARY> for(var i=0; i<1000000; i++){
      name = people[Math.floor(Math.random()*people.length)];
      user_id = i;
      boolean = [true, false][Math.floor(Math.random()*2)];
@@ -82,31 +82,35 @@ switched to db test
 
 NOTE: Writing one million documents in the JS shell will take several minutes.
 
-### 1) Start the config server and create a cluster with one shard
+### 1) Start the config servers and create a cluster with one shard
 
-#### 1.1) Create the config directory: /data/example/config
+NOTE: In a test environment, one config server will suffice.  In a production environment, the recommended set-up is to use three config servers.  This example will use three config servers.  
 
-#### 1.2) Start the config server in a new terminal window
+#### 1.1) Create the config directories: /data/example/config1, /data/example/config2, and /data/example/config3
 
-<% code 'javascript' do %>
-$ bin/mongod --configsvr --dbpath /data/example/config --port 20000
-<% end %>
-
-NOTE:  Because this example is set up in a testing environment on localhost, one config server will suffice.  In a production setup three config servers should be used, each process running on a different machine.  
-
-#### 1.3) Start mongos in a new terminal
-
-NOTE:  If you are using the dummy collection from step 0 and are just experimenting with sharding, you can use a small --chunkSize (1MB works well).  This way it will not be necessary to insert 64MB worth of documents before the Balancer starts to move them around.  This should not be used for production.  
+#### 1.2) Start the config servers, each in a new terminal window
 
 <% code 'javascript' do %>
-$ bin/mongos --configdb localhost:20000 --port 27017 [--chunkSize 1]
+$ bin/mongod --configsvr --dbpath /data/example/config1 --port 20001
 <% end %>
-
-NOTE:  localhost:20000 is the address and host port of the config server, not the mongos process.  In the above example, mongos will be running on port 27017.  27017 is the default port for mongo, so --port 27017 may be omitted.  It has been included here only as an example.  As mentioned above, because this is a test environment, only a single configdb is used.  If there were three config servers, mongos would be started like so:
 
 <% code 'javascript' do %>
-$ bin/mongos --configdb hosta,hostb,hostc --port 27017
+$ bin/mongod --configsvr --dbpath /data/example/config2 --port 20002
 <% end %>
+
+<% code 'javascript' do %>
+$ bin/mongod --configsvr --dbpath /data/example/config3 --port 20003
+<% end %>
+
+#### 1.3) Start mongos in a new terminal 
+
+<% code 'javascript' do %>
+$ bin/mongos --configdb localhost:20001,localhost:20002,localhost:20003 --port 27017 --chunkSize 1
+<% end %>
+
+NOTE:  If you are using the dummy collection from step 0 and are just experimenting with sharding, you can use a small --chunkSize (1MB works well).  This way it will not be necessary to insert 64MB worth of documents before the Balancer starts to move them around.  This should not be used for production. 
+
+Additionally, localhost:20000 is the address and host port of the config server, not the mongos process.  In the above example, mongos will be running on port 27017.  27017 is the default port for mongo, so --port 27017 may be omitted.  It has been included here only as an example.  
 
 #### 1.4) In a new terminal, connect to the mongos process, and add the first shard:
 
@@ -224,13 +228,13 @@ mongos> db.stats()
 		"myset/localhost:10001,localhost:10003,localhost:10002" : {
 			"db" : "test",
 			"collections" : 3,
-			"objects" : 905667,
-			"avgObjSize" : 100.33174224080153,
-			"dataSize" : 90867148,
+			"objects" : 973887,
+			"avgObjSize" : 100.33173458522396,
+			"dataSize" : 97711772,
 			"storageSize" : 141258752,
 			"numExtents" : 15,
 			"indexes" : 2,
-			"indexSize" : 55269760,
+			"indexSize" : 56978544,
 			"fileSize" : 1006632960,
 			"nsSizeMB" : 16,
 			"ok" : 1
@@ -238,25 +242,25 @@ mongos> db.stats()
 		"myset2/localhost:10004,localhost:10006,localhost:10005" : {
 			"db" : "test",
 			"collections" : 3,
-			"objects" : 99564,
-			"avgObjSize" : 100.33019967056366,
-			"dataSize" : 9989276,
-			"storageSize" : 21262336,
-			"numExtents" : 9,
+			"objects" : 26125,
+			"avgObjSize" : 100.33286124401914,
+			"dataSize" : 2621196,
+			"storageSize" : 11194368,
+			"numExtents" : 8,
 			"indexes" : 2,
-			"indexSize" : 8061536,
+			"indexSize" : 2093056,
 			"fileSize" : 201326592,
 			"nsSizeMB" : 16,
 			"ok" : 1
 		}
 	},
-	"objects" : 1005231,
-	"avgObjSize" : 100.33158945555797,
-	"dataSize" : 100856424,
-	"storageSize" : 162521088,
-	"numExtents" : 24,
+	"objects" : 1000012,
+	"avgObjSize" : 100.33176401883178,
+	"dataSize" : 100332968,
+	"storageSize" : 152453120,
+	"numExtents" : 23,
 	"indexes" : 4,
-	"indexSize" : 63331296,
+	"indexSize" : 59071600,
 	"fileSize" : 1207959552,
 	"ok" : 1
 }
@@ -270,8 +274,64 @@ mongos> db.printShardingStatus()
 	{  "_id" : "admin",  "partitioned" : false,  "primary" : "config" }
 	{  "_id" : "test",  "partitioned" : true,  "primary" : "myset" }
 		test.test_collection chunks:
-				myset2	19
-				myset	172
+				myset2	5
+				myset	186
+			too many chunks to print, use verbose if you want to force print
+
+mongos> db.stats()
+{
+	"raw" : {
+		"myset/localhost:10001,localhost:10003,localhost:10002" : {
+			"db" : "test",
+			"collections" : 3,
+			"objects" : 910960,
+			"avgObjSize" : 100.33197066830596,
+			"dataSize" : 91398412,
+			"storageSize" : 141258752,
+			"numExtents" : 15,
+			"indexes" : 2,
+			"indexSize" : 55400576,
+			"fileSize" : 1006632960,
+			"nsSizeMB" : 16,
+			"ok" : 1
+		},
+		"myset2/localhost:10004,localhost:10006,localhost:10005" : {
+			"db" : "test",
+			"collections" : 3,
+			"objects" : 89052,
+			"avgObjSize" : 100.32942550419979,
+			"dataSize" : 8934536,
+			"storageSize" : 11194368,
+			"numExtents" : 8,
+			"indexes" : 2,
+			"indexSize" : 7178528,
+			"fileSize" : 201326592,
+			"nsSizeMB" : 16,
+			"ok" : 1
+		}
+	},
+	"objects" : 1000012,
+	"avgObjSize" : 100.33174401907178,
+	"dataSize" : 100332948,
+	"storageSize" : 152453120,
+	"numExtents" : 23,
+	"indexes" : 4,
+	"indexSize" : 62579104,
+	"fileSize" : 1207959552,
+	"ok" : 1
+}
+mongos> db.printShardingStatus()
+--- Sharding Status --- 
+  sharding version: { "_id" : 1, "version" : 3 }
+  shards:
+	{  "_id" : "myset",  "host" : "myset/localhost:10001,localhost:10003,localhost:10002" }
+	{  "_id" : "myset2",  "host" : "myset2/localhost:10004,localhost:10006,localhost:10005" }
+  databases:
+	{  "_id" : "admin",  "partitioned" : false,  "primary" : "config" }
+	{  "_id" : "test",  "partitioned" : true,  "primary" : "myset" }
+		test.test_collection chunks:
+				myset2	17
+				myset	174
 			too many chunks to print, use verbose if you want to force print
 
 mongos> 
