@@ -1,5 +1,5 @@
 ---
-title: How to turn a six member replica set into a sharded cluster composed of two three-member replica sets
+title: How to expand a three member replica set into a sharded cluster composed of two three-member replica sets
 created_at: 2011-11-29
 recipe: true
 author: Marc Bastien
@@ -8,55 +8,51 @@ description: How to turn a six member replica set into a sharded cluster compose
 
 ### Outline
 
-0) Set up the replica set (if one does not exist already)
-1) Shrink the replica set from six nodes to three
-2) Start the config server and create a cluster with one shard
-3) Create a second replica set with the remaining 3 mongods
-4) Add the second replica set to the sharded cluster
-5) Enable sharding on the desired collection(s)
+In this example, we will start with a single replica set containing three nodes and expand it into a sharded cluster composed of two three-member replica sets.  This example takes place in a test environment on localhost.  Just about all of the steps will be the same for a production environment, except where otherwise noted.  If you are following this example in a production environment, or a test set-up with multiple servers, simply replace "localhost" with the machine DNS name or IP address where applicable.  
 
-### 0) Set up 6 node replica set and create some dummy data
+Here is the order of operations:
 
-For the purpose of this example, I created a 6 member replica set and generated a test collection with some dummy data.
+0) Set up the three member replica set (if one does not exist already) and create a dummy collection
+1) Start the config server and create a cluster with one shard
+2) Create a second replica set with three new mongod processess
+3) Add the second replica set to the sharded cluster
+4) Enable sharding on the desired collection(s)
 
-#### 0.1) Create the necessary directories.  In this example, the directories are /data/example/node1, /data/example/node2, /data/example/node3, /data/example/node4, /data/example/node5, and /data/example/node6
+### 0) Set up a three member replica set and create some dummy data
 
-#### 0.2) Start 6 instances of mongod in six terminal windows
+For the purpose of this example, I created a three member replica set and generated a test collection with some dummy data.  
+
+#### 0.1) Create the necessary directories.  In this example, the directories are /data/example/node1, /data/example/node2, and /data/example/node3
+
+#### 0.2) Start three instances of mongod in three terminal windows
 
 <% code 'javascript' do %>
-$ bin/mongod --dbpath /data/example/node1 --port 10001 --replSet myset/localhost:10002 --rest
+$ bin/mongod --dbpath /data/example/node1 --port 10001 --replSet myset --oplogSize 700 --rest
 <% end %>
 
 <% code 'javascript' do %>
-$ bin/mongod --dbpath /data/example/node2 --port 10002 --replSet myset/localhost:10001 --rest
+$ bin/mongod --dbpath /data/example/node2 --port 10002 --replSet myset --oplogSize 700 --rest
 <% end %>
 
 <% code 'javascript' do %>
-$ bin/mongod --dbpath /data/example/node3 --port 10003 --replSet myset/localhost:10001 --rest
+$ bin/mongod --dbpath /data/example/node3 --port 10003 --replSet myset --oplogSize 700 --rest
 <% end %>
 
-<% code 'javascript' do %>
-$ bin/mongod --dbpath /data/example/node4 --port 10004 --replSet myset/localhost:10001 --rest
-<% end %>
-
-<% code 'javascript' do %>
-$ bin/mongod --dbpath /data/example/node5 --port 10005 --replSet myset/localhost:10001 --rest
-<% end %>
-
-<% code 'javascript' do %>
-$ bin/mongod --dbpath /data/example/node6 --port 10006 --replSet myset/localhost:10001 --rest
-<% end %>
+NOTE: For the purpose of testing, the --oplogSize 700 option has been used to limit the oplog of each mongod process to 700MB instead of allowing each process to reserve 5% of the free disk space on the volume.  This should also allow each process to start up a little faster.  This should not be used in a production environment.  
 
 #### 0.3) In a new terminal window, connect to one of the servers
 
 <% code 'javascript' do %>
 $ bin/mongo localhost:10001/admin
+MongoDB shell version: 2.0.2-rc1
+connecting to: localhost:10001/admin
+> 
 <% end %>
 
 #### 0.4) Initialize the set
 
 <% code 'javascript' do %>
-> db.runCommand({"replSetInitiate" : {"_id" : "myset", "members" : [{"_id" : 1, "host" : "localhost:10001"}, {"_id" : 2, "host" : "localhost:10002"}, {"_id" : 3, "host" : "localhost:10003"}, {"_id" : 4, "host" : "localhost:10004"}, {"_id" : 5, "host" : "localhost:10005"}, {"_id" : 6, "host" : "localhost:10006"}]}})
+> db.runCommand({"replSetInitiate" : {"_id" : "myset", "members" : [{"_id" : 1, "host" : "localhost:10001"}, {"_id" : 2, "host" : "localhost:10002"}, {"_id" : 3, "host" : "localhost:10003"}]}})
 {
 	"info" : "Config now saved locally.  Should come online in about a minute.",
 	"ok" : 1
@@ -71,41 +67,26 @@ This little JavaScript program will write one million documents to the collectio
 <% end %>
 
 <% code 'javascript' do %>
-people = ["Marc", "Bill", "George", "Eliot", "Matt", "Trey", "Tracy", "Greg", "Steve", "Kristina", "Katie", "Jeff"]
-for(var i=0; i<10000000; i++){
+> use test
+switched to db test
+> people = ["Marc", "Bill", "George", "Eliot", "Matt", "Trey", "Tracy", "Greg", "Steve", "Kristina", "Katie", "Jeff"];
+> for(var i=0; i<1000000; i++){
      name = people[Math.floor(Math.random()*people.length)];
      user_id = i;
      boolean = [true, false][Math.floor(Math.random()*2)];
      added_at = new Date();
-     randInt = Math.floor(Math.random()*101);
-     db.test_collection.save({"name":name, "user_id":user_id, "boolean": boolean, "added_at":added_at, "randInt":randInt });
+     number = Math.floor(Math.random()*10001);
+     db.test_collection.save({"name":name, "user_id":user_id, "boolean": boolean, "added_at":added_at, "number":number });
 }
 <% end %>
 
-### 1) Shrink the replica set from six nodes to three
+NOTE: Writing one million documents in the JS shell will take several minutes.
 
-If you created the dummy collection in step 0, then you should already be connected to the Primary node.  If you skipped this step, then connect to the Primary node with the JS Shell.
+### 1) Start the config server and create a cluster with one shard
 
-<% code 'javascript' do %>
-$ bin/mongo localhost:10001/admin
-MongoDB shell version: 2.0.2-rc1
-connecting to: localhost:10001/admin
-PRIMARY> use admin
-switched to db admin
-PRIMARY> rs.remove("localhost:10006")
-{ "ok" : 1 }
-PRIMARY> rs.remove("localhost:10005")
-{ "ok" : 1 }
-PRIMARY> rs.remove("localhost:10004")
-{ "ok" : 1 }
-PRIMARY> 
-<% end %>
+#### 1.1) Create the config directory: /data/example/config
 
-### 2) Start the config server and create a cluster with one shard
-
-#### 2.1) Create the config directory: /data/example/config
-
-#### 2.2) Start the config server
+#### 1.2) Start the config server in a new terminal window
 
 <% code 'javascript' do %>
 $ bin/mongod --configsvr --dbpath /data/example/config --port 20000
@@ -113,7 +94,7 @@ $ bin/mongod --configsvr --dbpath /data/example/config --port 20000
 
 NOTE:  Because this example is set up in a testing environment on localhost, one config server will suffice.  In a production setup three config servers should be used, each process running on a different machine.  
 
-#### 2.3) Start mongos in a new terminal
+#### 1.3) Start mongos in a new terminal
 
 NOTE:  If you are using the dummy collection from step 0 and are just experimenting with sharding, you can use a small --chunkSize (1MB works well).  This way it will not be necessary to insert 64MB worth of documents before the Balancer starts to move them around.  This should not be used for production.  
 
@@ -121,13 +102,13 @@ NOTE:  If you are using the dummy collection from step 0 and are just experiment
 $ bin/mongos --configdb localhost:20000 --port 27017 [--chunkSize 1]
 <% end %>
 
-NOTE:  localhost:20000 is the host port for the config server, not mongos.  mongos will be running on port 27017.  As mentioned above, because this is a test environment, only a single configdb is used.  If there were three config servers, mongos would be started like so:
+NOTE:  localhost:20000 is the address and host port of the config server, not the mongos process.  In the above example, mongos will be running on port 27017.  27017 is the default port for mongo, so --port 27017 may be omitted.  It has been included here only as an example.  As mentioned above, because this is a test environment, only a single configdb is used.  If there were three config servers, mongos would be started like so:
 
 <% code 'javascript' do %>
 $ bin/mongos --configdb hosta,hostb,hostc --port 27017
 <% end %>
 
-#### 2.4) In a new terminal, connect to the mongos process, and add the first shard:
+#### 1.4) In a new terminal, connect to the mongos process, and add the first shard:
 
 <% code 'javascript' do %>
 $ bin/mongo localhost:27017/admin
@@ -138,96 +119,36 @@ mongos> db.runCommand( { addshard : "myset/localhost:10001,localhost:10002,local
 mongos> 
 <% end %>
 
-### 3) Create a second replica set with the remaining 3 mongod processes
+### 2) Create a second replica set with three new mongod processes
 
-#### 3.1) Stop the mongod processess (if they have not been stopped already), and restart them as standalone instances.  Connect to each and remove the local and test dbs.  
+#### 2.1) Create the necessary directories.  In this example, the directories are /data/example/node4, /data/example/node5, and /data/example/node6
 
-In the terminal window of the mongod instance that was connected to node4 (localhost:10004):
+#### 2.2) Start three instances of mongod in three new terminal windows
+
 <% code 'javascript' do %>
-$ bin/mongod --dbpath /data/example/node4 --port 10004 --rest
+$ bin/mongod --dbpath /data/example/node4 --port 10004 --replSet myset2 --oplogSize 700 --rest
 <% end %>
 
-In a new terminal window:
 <% code 'javascript' do %>
-$ bin/mongo localhost:10004/admin
-MongoDB shell version: 2.0.2-rc1
-connecting to: localhost:10004/admin
-> use local
-switched to db local
-> db.dropDatabase()
-{ "dropped" : "local", "ok" : 1 }
-> use test
-switched to db test
-> db.dropDatabase()
-{ "dropped" : "test", "ok" : 1 }
+$ bin/mongod --dbpath /data/example/node5 --port 10005 --replSet myset2 --oplogSize 700 --rest
 <% end %>
 
-In the terminal window of the mongod instance that was connected to node5 (localhost:10005):
 <% code 'javascript' do %>
-$ bin/mongod --dbpath /data/example/node5 --port 10005 --rest
+$ bin/mongod --dbpath /data/example/node6 --port 10006 --replSet myset2 --oplogSize 700 --rest
 <% end %>
 
-In a different terminal window:
-<% code 'javascript' do %>
-$ bin/mongo localhost:10005/admin
-MongoDB shell version: 2.0.2-rc1
-connecting to: localhost:10005/admin
-> use local
-switched to db local
-> db.dropDatabase()
-{ "dropped" : "local", "ok" : 1 }
-> use test
-switched to db test
-> db.dropDatabase()
-{ "dropped" : "test", "ok" : 1 }
-<% end %>
+NOTE: As in step 0.2, the --oplogSize 700 option has been used.  This should not be used in a production environment. 
 
-In the terminal window of the mongod instance that was connected to node6 (localhost:10006):
-<% code 'javascript' do %>
-$ bin/mongod --dbpath /data/example/node4 --port 10006 --rest
-<% end %>
-
-In a different terminal window:
-<% code 'javascript' do %>
-$ bin/mongo localhost:10006/admin
-MongoDB shell version: 2.0.2-rc1
-connecting to: localhost:10006/admin
-> use local
-switched to db local
-> db.dropDatabase()
-{ "dropped" : "local", "ok" : 1 }
-> use test
-switched to db test
-> db.dropDatabase()
-{ "dropped" : "test", "ok" : 1 }
-<% end %>
-
-#### 3.2) Now restart each mongod instance (4, 5, and 6) as part of a second replica set:
-
-In the terminal window of the mongod instance that was connected to node4 (localhost:10004):
-<% code 'javascript' do %>
-$ bin/mongod --dbpath /data/example/node4 --port 10004 --replSet myset2/localhost:10005 --rest
-<% end %>
-
-In the terminal window of the mongod instance that was connected to node5 (localhost:10005):
-<% code 'javascript' do %>
-$ bin/mongod --dbpath /data/example/node5 --port 10005 --replSet myset2/localhost:10004 --rest
-<% end %>
-
-In the terminal window of the mongod instance that was connected to node6 (localhost:10006):
-<% code 'javascript' do %>
-$ bin/mongod --dbpath /data/example/node6 --port 10006 --replSet myset2/localhost:10004 --rest
-<% end %>
-
-#### 3.3) In a new terminal window, connect to one member of the new replica set
+#### 2.3) In a new terminal window, connect to one of the servers
 
 <% code 'javascript' do %>
 $ bin/mongo localhost:10004/admin
 MongoDB shell version: 2.0.2-rc1
 connecting to: localhost:10004/admin
+> 
 <% end %>
 
-#### 3.4) Initialize the set
+#### 2.4) Initialize the set
 
 <% code 'javascript' do %>
 > db.runCommand({"replSetInitiate" : {"_id" : "myset2", "members" : [{"_id" : 1, "host" : "localhost:10004"}, {"_id" : 2, "host" : "localhost:10005"}, {"_id" : 3, "host" : "localhost:10006"}]}})
@@ -237,7 +158,7 @@ connecting to: localhost:10004/admin
 }
 <% end %>
 
-### 4) Add the second replica set to the sharded cluster
+### 3) Add the second replica set to the sharded cluster
 
 In the mongos terminal window:
 <% code 'javascript' do %>
@@ -265,31 +186,95 @@ mongos> db.runCommand({listshards:1})
 }
 <% end %>
 
-### 5) Enable sharding on the collection(s) in question.  
+### 4) Enable sharding on the collection(s) in question.  
 
-#### 5.1) Enabling Sharding on the Database:
+#### 4.1) Enabling Sharding on the Database
 
 <% code 'javascript' do %>
 mongos> db.runCommand( { enablesharding : "test" } )
 { "ok" : 1 }
 <% end %>
 
-#### 5.2) Create an index on the desired shard key, if it does not already exist:
+#### 4.2) Create an index on the desired shard key, if it does not already exist.  In this example, we will shard on the "number" key in the dummy collection.  
 
 <% code 'javascript' do %>
 mongos> use test
 switched to db test
-mongos> db.test_collection.ensureIndex({name:1})
+mongos> db.test_collection.ensureIndex({number:1})
 <% end %>
 
-#### 5.3) Shard the desired collection(s)
+#### 4.3) Shard the desired collection(s)
 
 <% code 'javascript' do %>
 mongos> use admin
 switched to db admin
-mongos> db.runCommand( { shardcollection : "test.test_collection", key : {"name":1} });
+mongos> db.runCommand( { shardcollection : "test.test_collection", key : {"number":1} })
 { "collectionsharded" : "test.test_collection", "ok" : 1 }
 mongos> 
 <% end %>
 
-The collection "test_collection" is now sharded.  You can confirm this by switching to the test database and running db.stats() or db.printShardingStatus()
+The collection "test_collection" is now sharded!  In a few minutes the Balancer will begin to redistribute the chunks.  You can confirm this by switching to the test database and running db.stats() or db.printShardingStatus().  You can also confirm that the chunks been redistributed by looking in the data directories.  If the sharded collection is written to again, the documents will be distributed between the new shards.  
+
+<% code 'javascript' do %>
+mongos> use test
+switched to db test
+mongos> db.stats()
+{
+	"raw" : {
+		"myset/localhost:10001,localhost:10003,localhost:10002" : {
+			"db" : "test",
+			"collections" : 3,
+			"objects" : 905667,
+			"avgObjSize" : 100.33174224080153,
+			"dataSize" : 90867148,
+			"storageSize" : 141258752,
+			"numExtents" : 15,
+			"indexes" : 2,
+			"indexSize" : 55269760,
+			"fileSize" : 1006632960,
+			"nsSizeMB" : 16,
+			"ok" : 1
+		},
+		"myset2/localhost:10004,localhost:10006,localhost:10005" : {
+			"db" : "test",
+			"collections" : 3,
+			"objects" : 99564,
+			"avgObjSize" : 100.33019967056366,
+			"dataSize" : 9989276,
+			"storageSize" : 21262336,
+			"numExtents" : 9,
+			"indexes" : 2,
+			"indexSize" : 8061536,
+			"fileSize" : 201326592,
+			"nsSizeMB" : 16,
+			"ok" : 1
+		}
+	},
+	"objects" : 1005231,
+	"avgObjSize" : 100.33158945555797,
+	"dataSize" : 100856424,
+	"storageSize" : 162521088,
+	"numExtents" : 24,
+	"indexes" : 4,
+	"indexSize" : 63331296,
+	"fileSize" : 1207959552,
+	"ok" : 1
+}
+mongos> db.printShardingStatus()
+--- Sharding Status --- 
+  sharding version: { "_id" : 1, "version" : 3 }
+  shards:
+	{  "_id" : "myset",  "host" : "myset/localhost:10001,localhost:10003,localhost:10002" }
+	{  "_id" : "myset2",  "host" : "myset2/localhost:10004,localhost:10006,localhost:10005" }
+  databases:
+	{  "_id" : "admin",  "partitioned" : false,  "primary" : "config" }
+	{  "_id" : "test",  "partitioned" : true,  "primary" : "myset" }
+		test.test_collection chunks:
+				myset2	19
+				myset	172
+			too many chunks to print, use verbose if you want to force print
+
+mongos> 
+<% end %>
+
+As time passes, more chunks are migrated to the shard on replica set "myset2".  
