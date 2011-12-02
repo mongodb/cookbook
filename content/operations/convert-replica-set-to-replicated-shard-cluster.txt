@@ -1,0 +1,459 @@
+---
+title: Converting a Replica Set to a Replicated Shard Cluster
+created_at: 2011-11-30
+recipe: true
+author: Marc Bastien
+filter:
+  - erb
+  - markdown
+---
+
+## Overview
+
+This tutorial documents the process for converting a single 3-member
+replica set, to a shard cluster that consists of 2 shards. Each shard
+will consist of an independent 3-member replica set.
+
+The procedure that follows uses a test environment running on a local
+system (i.e. localhost,) and have been tested you should feel
+encouraged to "follow along at home." In a production environment or
+one with multiple systems, use the same process except where noted.
+
+In brief, the process is as follows:
+
+1. Create or select and existing a 3-member replica set, and insert
+   some data into a collection.
+
+2. Start the config servers and create a shard cluster with a single
+   shard.
+
+3. Create a second replica set with three new `mongod` processes.
+
+4. Add the second replica set to the sharded cluster.
+
+5. Enable sharding on the desired collection or collections.
+
+## Process
+
+### 1. Set up a Three Member Replica Set and Insert Test Data
+
+#### 1.1. Create Directories for First Replica Set Instance
+
+Create the following  data directories for the members of the
+first replica set, named set1:
+
+- `/data/example/firstset1`
+- `/data/example/firstset2`
+- `/data/example/firstset3`
+
+#### 1.2. Start Three `mongod` instances
+
+Run each command in a separate terminal window or GNU Screen window.
+
+<% code 'javascript' do %>
+$ bin/mongod --dbpath /data/example/firstset1 --port 10001 --replSet firstset --oplogSize 700 --rest
+<% end %>
+
+<% code 'javascript' do %>
+$ bin/mongod --dbpath /data/example/firstset2 --port 10002 --replSet firstset --oplogSize 700 --rest
+<% end %>
+
+<% code 'javascript' do %>
+$ bin/mongod --dbpath /data/example/firstset3 --port 10003 --replSet firstset --oplogSize 700 --rest
+<% end %>
+
+**Note:** Here, the "`--oplogSize 700`" option restricts the size of
+the operation log (i.e. oplog) for each `mongod` process to
+700MB. Without the `--oplogSize` option, `mongod` will reserve
+approximately 5% of the free disk space on the volume. By limiting the
+size of the oplog, each process will start quicker. Omit this setting
+in production environments.
+
+#### 1.3 Connect to One MongoDB Instance with `mongo` shell
+
+Run the following command in a new terminal to connect to a node.
+
+<% code 'javascript' do %>
+$ bin/mongo localhost:10001/admin
+MongoDB shell version: 2.0.2-rc1
+connecting to: localhost:10001/admin
+>
+<% end %>
+
+**Note:** Above and hereafter, if you are running in a production
+environment or are testing this process with `mongod` instances on
+multiple systems replace "localhost" with a resolvable domain,
+hostname, or the IP address of your system.
+
+#### 1.4. Initialize the First Replica Set
+
+<% code 'javascript' do %>
+> db.runCommand({"replSetInitiate" : {"_id" : "firstset, "members" : [{"_id" : 1, "host" : "localhost:10001"}, {"_id" : 2, "host" : "localhost:10002"}, {"_id" : 3, "host" : "localhost:10003"}]}})
+{
+	"info" : "Config now saved locally.  Should come online in about a minute.",
+	"ok" : 1
+}
+<% end %>
+
+#### 1.5. Create and Populate a New a Collection
+
+The following JavScript creates one-million documents to the
+collection "`test_collection`" in the following form:
+
+<% code 'javascript' do %>
+{ "_id" : ObjectId("4ed5420b8fc1dd1df5886f70"), "name" : "Greg", "user_id" : 4, "boolean" : true, "added_at" : ISODate("2011-11-29T20:35:23.121Z"), "number" : 74 }
+<% end %>
+
+Use the following sequence of operations from the `mongo` prompt.
+
+<% code 'javascript' do %>
+PRIMARY> use test
+switched to db test
+PRIMARY> people = ["Marc", "Bill", "George", "Eliot", "Matt", "Trey", "Tracy", "Greg", "Steve", "Kristina", "Katie", "Jeff"];
+PRIMARY> for(var i=0; i<1000000; i++){
+     name = people[Math.floor(Math.random()*people.length)];
+     user_id = i;
+     boolean = [true, false][Math.floor(Math.random()*2)];
+     added_at = new Date();
+     number = Math.floor(Math.random()*10001);
+     db.test_collection.save({"name":name, "user_id":user_id, "boolean": boolean, "added_at":added_at, "number":number });
+}
+<% end %>
+
+Creating and fully replicating one million documents in the `mongo`
+shell may take several minutes depending on your system.
+
+### 2. Start the "config" Instances and Create a Cluster a Single Shard
+
+**Note:** For development and testing environments, a single config
+server is sufficient, in production environments, use three config
+servers. Because config instances only store the *metadata* for the
+shard cluster, they have minimal resource requirements.
+
+These instructions specify creating three config servers.
+
+#### 2.1. Create Directories for Config Instances
+
+Create the following  data directories for each of the config
+instances:
+
+- `/data/example/config1`
+- `/data/example/config2`
+- `/data/example/config3`
+
+#### 2.2. Start the config Servers
+
+Run each command in a separate terminal window or GNU Screen window.
+
+<% code 'javascript' do %>
+$ bin/mongod --configsvr --dbpath /data/example/config1 --port 20001
+<% end %>
+
+<% code 'javascript' do %>
+$ bin/mongod --configsvr --dbpath /data/example/config2 --port 20002
+<% end %>
+
+<% code 'javascript' do %>
+$ bin/mongod --configsvr --dbpath /data/example/config3 --port 20003
+<% end %>
+
+#### 2.3. Start `mongos`
+
+Run the following command to start a `mongos` instance. Run this
+command in a new terminal window or GNU Screen window.
+
+<% code 'javascript' do %>
+$ bin/mongos --configdb localhost:20001,localhost:20002,localhost:20003 --port 27017 --chunkSize 1
+<% end %>
+
+**Note:** If you are using the collection created earlier, or are just
+just experimenting with sharding, you can use a small --chunkSize (1MB
+works well.) The default chunkSize of 64MB, means that your cluster
+will need to have 64MB of data before the MongoDB's automatic sharding
+begins working. In production environments, do not use a small shard
+size.
+
+The `configdb` options specify the *configuration servers*
+(e.g. `localhost:20001`, `localhost:20002`, and `localhost:2003`). The
+`mongos` process runs on the default "MongoDB" port (i.e. `27017`),
+while the databases themselves, in this example run on ports in the
+`30001` series. In the above example, since `27017` is the default
+port, the option "`--port 27017`" may be omitted: it is included here
+only as an example.
+
+#### 2.4. Add the first shard in `mongos`
+
+In in a new terminal window or GNU Screen session, add the first
+shard, using the following procedure:
+
+<% code 'javascript' do %>
+$ bin/mongo localhost:27017/admin
+MongoDB shell version: 2.0.2-rc1
+connecting to: localhost:27017/admin
+mongos> db.runCommand( { addshard : "first/localhost:10001,localhost:10002,localhost:10003" } )
+{ "shardAdded" : "firstset", "ok" : 1 }
+mongos>
+<% end %>
+
+### 3. Create a second replica set with three new mongod processes
+
+#### 3.1. Create Directories for Second Replica Set Instance
+
+Create the following  data directories for the members of the
+second replica set, named set1:
+
+- `/data/example/secondset1`
+- `/data/example/secondset2`
+- `/data/example/secondset3`
+
+#### 3.2. Start three instances of mongod in three new terminal windows
+
+<% code 'javascript' do %>
+$ bin/mongod --dbpath /data/example/secondset1 --port 10004 --replSet secondset --oplogSize 700 --rest
+<% end %>
+
+<% code 'javascript' do %>
+$ bin/mongod --dbpath /data/example/secondset2 --port 10005 --replSet secondset --oplogSize 700 --rest
+<% end %>
+
+<% code 'javascript' do %>
+$ bin/mongod --dbpath /data/example/secondset3 --port 10006 --replSet secondset --oplogSize 700 --rest
+<% end %>
+
+NOTE: As in 1.2, this set uses the smaller `oplogSize`
+configuration. Omit this setting in production environments.
+
+#### 3.3. Connect to One MongoDB Instance with `mongo` shell
+
+<% code 'javascript' do %>
+$ bin/mongo localhost:10004/admin
+MongoDB shell version: 2.0.2-rc1
+connecting to: localhost:10004/admin
+>
+<% end %>
+
+#### 3.4. Initialize the Second Replica Set
+
+<% code 'javascript' do %>
+> db.runCommand({"replSetInitiate" : {"_id" : "secondset", "members" : [{"_id" : 1, "host" : "localhost:10004"}, {"_id" : 2, "host" : "localhost:10005"}, {"_id" : 3, "host" : "localhost:10006"}]}})
+{
+	"info" : "Config now saved locally.  Should come online in about a minute.",
+	"ok" : 1
+}
+<% end %>
+
+### 4. Add the Second Replica Set to the Shard Cluster
+
+In a connection to the `mongos` instance (created above), follow the
+below procedure.
+
+<% code 'javascript' do %>
+mongos> use admin
+switched to db admin
+mongos> db.runCommand( { addshard : "secondset/localhost:10004,localhost:10005,localhost:10006" } )
+{ "shardAdded" : "secondset", "ok" : 1 }
+<% end %>
+
+You can verify that both shards are properly configured by running the
+`listshards` command. View this and example output below:
+
+<% code 'javascript' do %>
+mongos> db.runCommand({listshards:1})
+{
+	"shards" : [
+		{
+			"_id" : "firstset",
+			"host" : "firstset/localhost:10001,localhost:10003,localhost:10002"
+		},
+		{
+			"_id" : "secondset",
+			"host" : "secondset/localhost:10004,localhost:10006,localhost:10005"
+		}
+	],
+	"ok" : 1
+}
+<% end %>
+
+### 5. Enable Sharding
+
+Sharding in MongoDB must be enabled on *both* the database and
+collection levels.
+
+#### 5.1. Enabling Sharding on the Database Level
+
+Issue the `enablesharding` command. The "`test`" argument specifies
+the name of the database. See the following example:
+
+<% code 'javascript' do %>
+mongos> db.runCommand( { enablesharding : "test" } )
+{ "ok" : 1 }
+<% end %>
+
+#### 5.2. Create an Index on the Shard Key
+
+Create an index on the shard key. The shard key is used by MongoDB to
+distribute documents between shards. Once selected the shard key needs
+cannot be changed. Good shard keys:
+
+- will have values that are evenly distributed among all documents,
+- group documents that are likely to be accessed at the same time in
+  contiguous chunks, and
+- allow for effective distribution of activity among shards.
+
+Typically shard keys are compound, comprising of some sort of hash and
+some sort of other primary key. Selecting a shard key, depends on your
+data set, application architecture, and usage pattern, and is beyond
+the scope of this document. For the purposes of this example, we will
+shard the "number" key in the data inserted above. This would
+typically not a good shard key for production deployments.
+
+Create the index with the following procedure:
+
+<% code 'javascript' do %>
+mongos> use test
+switched to db test
+mongos> db.test_collection.ensureIndex({number:1})
+<% end %>
+
+#### 5.3. Shard the Collection
+
+Issue the following command to shard the collection:
+
+<% code 'javascript' do %>
+mongos> use admin
+switched to db admin
+mongos> db.runCommand( { shardcollection : "test.test_collection", key : {"number":1} })
+{ "collectionsharded" : "test.test_collection", "ok" : 1 }
+mongos>
+<% end %>
+
+The collection "`test_collection`" is now sharded!
+
+Over the next few minutes the Balancer will begin to redistribute
+chunks of documents. You can confirm this activity by switching to the
+`test` database and running `db.stats()` or `db.printShardingStatus()`.
+
+Future writes to the sharded collection will force MongoDB to
+redistribute documents (and chunks) among the new shards.
+
+See the following examples:
+
+<% code 'javascript' do %>
+mongos> use test
+switched to db test
+mongos> db.stats()
+{
+	"raw" : {
+		"firstset/localhost:10001,localhost:10003,localhost:10002" : {
+			"db" : "test",
+			"collections" : 3,
+			"objects" : 973887,
+			"avgObjSize" : 100.33173458522396,
+			"dataSize" : 97711772,
+			"storageSize" : 141258752,
+			"numExtents" : 15,
+			"indexes" : 2,
+			"indexSize" : 56978544,
+			"fileSize" : 1006632960,
+			"nsSizeMB" : 16,
+			"ok" : 1
+		},
+		"secondset/localhost:10004,localhost:10006,localhost:10005" : {
+			"db" : "test",
+			"collections" : 3,
+			"objects" : 26125,
+			"avgObjSize" : 100.33286124401914,
+			"dataSize" : 2621196,
+			"storageSize" : 11194368,
+			"numExtents" : 8,
+			"indexes" : 2,
+			"indexSize" : 2093056,
+			"fileSize" : 201326592,
+			"nsSizeMB" : 16,
+			"ok" : 1
+		}
+	},
+	"objects" : 1000012,
+	"avgObjSize" : 100.33176401883178,
+	"dataSize" : 100332968,
+	"storageSize" : 152453120,
+	"numExtents" : 23,
+	"indexes" : 4,
+	"indexSize" : 59071600,
+	"fileSize" : 1207959552,
+	"ok" : 1
+}
+mongos> db.printShardingStatus()
+--- Sharding Status ---
+  sharding version: { "_id" : 1, "version" : 3 }
+  shards:
+	{  "_id" : "firstset",  "host" : "firstset/localhost:10001,localhost:10003,localhost:10002" }
+	{  "_id" : "secondset",  "host" : "secondset/localhost:10004,localhost:10006,localhost:10005" }
+  databases:
+	{  "_id" : "admin",  "partitioned" : false,  "primary" : "config" }
+	{  "_id" : "test",  "partitioned" : true,  "primary" : "firstset" }
+		test.test_collection chunks:
+				secondset	5
+				firstset	186
+			too many chunks to print, use verbose if you want to force print
+
+mongos> db.stats()
+{
+	"raw" : {
+		"firstset/localhost:10001,localhost:10003,localhost:10002" : {
+			"db" : "test",
+			"collections" : 3,
+			"objects" : 910960,
+			"avgObjSize" : 100.33197066830596,
+			"dataSize" : 91398412,
+			"storageSize" : 141258752,
+			"numExtents" : 15,
+			"indexes" : 2,
+			"indexSize" : 55400576,
+			"fileSize" : 1006632960,
+			"nsSizeMB" : 16,
+			"ok" : 1
+		},
+		"secondset/localhost:10004,localhost:10006,localhost:10005" : {
+			"db" : "test",
+			"collections" : 3,
+			"objects" : 89052,
+			"avgObjSize" : 100.32942550419979,
+			"dataSize" : 8934536,
+			"storageSize" : 11194368,
+			"numExtents" : 8,
+			"indexes" : 2,
+			"indexSize" : 7178528,
+			"fileSize" : 201326592,
+			"nsSizeMB" : 16,
+			"ok" : 1
+		}
+	},
+	"objects" : 1000012,
+	"avgObjSize" : 100.33174401907178,
+	"dataSize" : 100332948,
+	"storageSize" : 152453120,
+	"numExtents" : 23,
+	"indexes" : 4,
+	"indexSize" : 62579104,
+	"fileSize" : 1207959552,
+	"ok" : 1
+}
+mongos> db.printShardingStatus()
+--- Sharding Status ---
+  sharding version: { "_id" : 1, "version" : 3 }
+  shards:
+	{  "_id" : "firstset",  "host" : "firstset/localhost:10001,localhost:10003,localhost:10002" }
+	{  "_id" : "secondset",  "host" : "secondset/localhost:10004,localhost:10006,localhost:10005" }
+  databases:
+	{  "_id" : "admin",  "partitioned" : false,  "primary" : "config" }
+	{  "_id" : "test",  "partitioned" : true,  "primary" : "secondset" }
+		test.test_collection chunks:
+				secondset	17
+				firstset	174
+			too many chunks to print, use verbose if you want to force print
+mongos>
+<% end %>
+
+The above demonstrates that, chunks are migrated to the shard on
+replica set "secondset" over time.
