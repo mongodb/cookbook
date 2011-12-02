@@ -11,17 +11,17 @@ filter:
 ## Overview
 
 This tutorial documents the process for converting a single 3-member
-replica set, to a shard cluster that consists of 2 shards. Each shard
+replica set to a shard cluster that consists of 2 shards. Each shard
 will consist of an independent 3-member replica set.
 
 The procedure that follows uses a test environment running on a local
-system (i.e. localhost,) and have been tested you should feel
+system (i.e. localhost,) and has been tested.  You should feel
 encouraged to "follow along at home." In a production environment or
 one with multiple systems, use the same process except where noted.
 
 In brief, the process is as follows:
 
-1. Create or select and existing a 3-member replica set, and insert
+1. Create or select an existing 3-member replica set, and insert
    some data into a collection.
 
 2. Start the config servers and create a shard cluster with a single
@@ -40,7 +40,7 @@ In brief, the process is as follows:
 #### 1.1. Create Directories for First Replica Set Instance
 
 Create the following  data directories for the members of the
-first replica set, named set1:
+first replica set, named firstset:
 
 - `/data/example/firstset1`
 - `/data/example/firstset2`
@@ -64,9 +64,9 @@ $ bin/mongod --dbpath /data/example/firstset3 --port 10003 --replSet firstset --
 
 **Note:** Here, the "`--oplogSize 700`" option restricts the size of
 the operation log (i.e. oplog) for each `mongod` process to
-700MB. Without the `--oplogSize` option, `mongod` will reserve
+700MB. Without the `--oplogSize` option, each `mongod` will reserve
 approximately 5% of the free disk space on the volume. By limiting the
-size of the oplog, each process will start quicker. Omit this setting
+size of the oplog, each process will start more quickly. Omit this setting
 in production environments.
 
 #### 1.3 Connect to One MongoDB Instance with `mongo` shell
@@ -95,9 +95,9 @@ hostname, or the IP address of your system.
 }
 <% end %>
 
-#### 1.5. Create and Populate a New a Collection
+#### 1.5. Create and Populate a New Collection
 
-The following JavScript creates one-million documents to the
+The following JavScript writes one million documents to the
 collection "`test_collection`" in the following form:
 
 <% code 'javascript' do %>
@@ -166,7 +166,7 @@ command in a new terminal window or GNU Screen window.
 $ bin/mongos --configdb localhost:20001,localhost:20002,localhost:20003 --port 27017 --chunkSize 1
 <% end %>
 
-**Note:** If you are using the collection created earlier, or are just
+**Note:** If you are using the collection created earlier, or are
 just experimenting with sharding, you can use a small --chunkSize (1MB
 works well.) The default chunkSize of 64MB, means that your cluster
 will need to have 64MB of data before the MongoDB's automatic sharding
@@ -176,9 +176,9 @@ size.
 The `configdb` options specify the *configuration servers*
 (e.g. `localhost:20001`, `localhost:20002`, and `localhost:2003`). The
 `mongos` process runs on the default "MongoDB" port (i.e. `27017`),
-while the databases themselves, in this example run on ports in the
+while the databases themselves, in this example, are running on ports in the
 `30001` series. In the above example, since `27017` is the default
-port, the option "`--port 27017`" may be omitted: it is included here
+port, the option "`--port 27017`" may be omitted.  It is included here
 only as an example.
 
 #### 2.4. Add the first shard in `mongos`
@@ -200,7 +200,7 @@ mongos>
 #### 3.1. Create Directories for Second Replica Set Instance
 
 Create the following  data directories for the members of the
-second replica set, named set1:
+second replica set, named secondset:
 
 - `/data/example/secondset1`
 - `/data/example/secondset2`
@@ -292,7 +292,7 @@ mongos> db.runCommand( { enablesharding : "test" } )
 #### 5.2. Create an Index on the Shard Key
 
 Create an index on the shard key. The shard key is used by MongoDB to
-distribute documents between shards. Once selected the shard key needs
+distribute documents between shards. Once selected the shard key 
 cannot be changed. Good shard keys:
 
 - will have values that are evenly distributed among all documents,
@@ -333,8 +333,7 @@ Over the next few minutes the Balancer will begin to redistribute
 chunks of documents. You can confirm this activity by switching to the
 `test` database and running `db.stats()` or `db.printShardingStatus()`.
 
-Future writes to the sharded collection will force MongoDB to
-redistribute documents (and chunks) among the new shards.
+Additional documents that are added to this collection will be distributed evenly between the shards.  
 
 See the following examples:
 
