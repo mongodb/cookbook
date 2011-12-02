@@ -1,0 +1,247 @@
+---
+title: Perform Two Phase Commits
+created_at: 2011-12-02
+recipe: true
+author: Antoine Girbal
+description: Perform Two-Phase Commits with MongoDB
+filter:
+  - erb
+  - markdown
+---
+
+A common problem with non-relational database is that it is not
+possible to do transactions across several documents. When executing a
+transaction composed of several sequential operations, some issues
+arise:
+
+- Atomicity: it is difficult to rollback changes by previous
+  operations if one fails.
+
+- Isolation: changes to a single document are seen by concurrent
+  processes, which may have an inconsistent view of the data during
+  the transaction execution.
+
+- Consistency: In case of a major failure (network, hardware) it is
+  possible that the data will be left inconsistent and difficult to
+  repair.
+
+MongoDB provides atomicity for an operation on a single
+document. Since documents can be fairly complex, this actually covers
+many more cases than with a traditional DB. Still there are cases
+where transactions across documents are needed, and that is when a
+two-phase commit can be used. The two-phase commit is made possible by
+the fact that documents are complex and can represent pending data and
+states. This process makes sure that the data is eventually
+consistent, which is usually what matters most to the system.
+
+## Account transfer example
+
+## Problem overview
+
+The most common example of transaction is to transfer funds from
+account A to B in a reliable way. With a traditional RDBMS, funds are
+substracted from A and added to B within an atomic transaction. With
+MongoDB, a viable solution is to use a two-phase commit.
+
+Let's have one collection holding accounts:
+
+<% code 'javascript' do %>
+foo:PRIMARY> db.accounts.save({name: "A", balance: 1000, pendingTransactions: []})
+foo:PRIMARY> db.accounts.save({name: "B", balance: 1000, pendingTransactions: []})
+foo:PRIMARY> db.accounts.find()
+{ "_id" : ObjectId("4d7bc66cb8a04f512696151f"), "name" : "A", "balance" : 1000, "pendingTransactions" : [ ] }
+{ "_id" : ObjectId("4d7bc67bb8a04f5126961520"), "name" : "B", "balance" : 1000, "pendingTransactions" : [ ] }
+{code}And we need one collection representing transactions:
+{code}foo:PRIMARY> db.transactions.save({source: "A", destination: "B", value: 100, state: "initial"})
+foo:PRIMARY> db.transactions.find()
+{ "_id" : ObjectId("4d7bc7a8b8a04f5126961522"), "source" : "A", "destination" : "B", "value" : 100, "state" : "initial" }
+<% end %>
+
+
+### Transaction description
+
+**Step 1:** the transaction state is switched to, "pending":
+
+<% code 'javascript' do %>
+foo:PRIMARY> t = db.transactions.findOne({state: "initial"})
+{
+	"_id" : ObjectId("4d7bc7a8b8a04f5126961522"),
+	"source" : "A",
+	"destination" : "B",
+	"value" : 100,
+	"state" : "initial"
+}
+foo:PRIMARY> db.transactions.update({_id: t._id}, {$set: {state: "pending"}})
+foo:PRIMARY> db.transactions.find()
+{ "_id" : ObjectId("4d7bc7a8b8a04f5126961522"), "source" : "A", "destination" : "B", "value" : 100, "state" : "pending" }
+<% end %>
+
+**Step 2:** apply the transaction to both accounts, and make sure the
+transaction is not already pending:
+
+<% code 'javascript' do %>
+foo:PRIMARY> db.accounts.update({name: t.source, pendingTransactions: {$ne: t._id}}, {$inc: {balance: -t.value}, $push: {pendingTransactions: t._id}})
+foo:PRIMARY> db.accounts.update({name: t.destination, pendingTransactions: {$ne: t._id}}, {$inc: {balance: t.value}, $push: {pendingTransactions: t._id}})
+foo:PRIMARY> db.accounts.find()
+{ "_id" : ObjectId("4d7bc97fb8a04f5126961523"), "balance" : 900, "name" : "A", "pendingTransactions" : [ ObjectId("4d7bc7a8b8a04f5126961522") ] }
+{ "_id" : ObjectId("4d7bc984b8a04f5126961524"), "balance" : 1100, "name" : "B", "pendingTransactions" : [ ObjectId("4d7bc7a8b8a04f5126961522") ] }
+<% end %>
+
+**Step 3:** set the transaction's state to "committed":
+
+<% code 'javascript' do %>
+foo:PRIMARY> db.transactions.update({_id: t._id}, {$set: {state: "committed"}})
+foo:PRIMARY> db.transactions.find()
+{ "_id" : ObjectId("4d7bc7a8b8a04f5126961522"), "destination" : "B", "source" : "A", "state" : "committed", "value" : 100 }
+<% end %>
+
+**Step 4:** remove the pending transaction from accounts:
+
+<% code 'javascript' do %>
+foo:PRIMARY> db.accounts.update({name: t.source}, {$pull: {pendingTransactions: ObjectId("4d7bc7a8b8a04f5126961522")}})
+foo:PRIMARY> db.accounts.update({name: t.destination}, {$pull: {pendingTransactions: ObjectId("4d7bc7a8b8a04f5126961522")}})
+foo:PRIMARY> db.accounts.find()
+{ "_id" : ObjectId("4d7bc97fb8a04f5126961523"), "balance" : 900, "name" : "A", "pendingTransactions" : [ ] }
+{ "_id" : ObjectId("4d7bc984b8a04f5126961524"), "balance" : 1100, "name" : "B", "pendingTransactions" : [ ] }
+<% end %>
+
+**Step 5:** set transaction's state to "done":
+
+<% code 'javascript' do %>
+foo:PRIMARY> db.transactions.update({_id: t._id}, {$set: {state: "done"}})
+foo:PRIMARY> db.transactions.find()
+{ "_id" : ObjectId("4d7bc7a8b8a04f5126961522"), "destination" : "B", "source" : "A", "state" : "done", "value" : 100 }
+<% end %>
+
+### Failure scenarios
+
+Now let's look at the failure scenarios and how to deal with them. For
+example, a failure can be that the application making the sequential
+operations suddenly dies, and is restarted.
+
+Cases to cover:
+
+- any failure between after step 1 and before step 3: Application
+  should get a list of transactions in state "pending" and resume from
+  step 2.
+
+- any failure after step 3 and before step 5: Application should get a
+  list of transactions in state "applied" and resume from step 4.
+
+Application is thus always able to resume the transaction and
+eventually get to a consistent state. These "repair" jobs should be
+run at application startup and possibly at regular interval to catch
+any unfinished transaction. The time it takes to get to a consistent
+state may vary depending on how long it takes to resume a failed
+transaction.
+
+### Rollback
+
+A common need may be to rollback a transaction, either because it has
+been cancelled or because it can never succeed (e.g. account B is
+closed).
+
+Two cases:
+
+- after step 3, the transaction is considered committed and should not
+  be rolled back. Instead, to undo the transaction, a new transaction
+  can be created with an opposite source and destination.
+
+- after step 1 and before step 3: the process below should be applied.
+
+**Step 1:** set the transaction's state to "canceling":
+
+<% code 'javascript' do %>
+foo:PRIMARY> db.transactions.update({_id: t._id}, {$set: {state: "canceling"}})
+<% end %>
+
+**Step 2:** undo the transaction from accounts:
+
+<% code 'javascript' do %>
+foo:PRIMARY> db.accounts.update({name: t.source, pendingTransactions: t._id}, {$inc: {balance: t.value}, $pull: {pendingTransactions: t._id}})
+foo:PRIMARY> db.accounts.update({name: t.destination, pendingTransactions: t._id}, {$inc: {balance: -t.value}, $pull: {pendingTransactions: t._id}})
+foo:PRIMARY> db.accounts.find()
+{ "_id" : ObjectId("4d7bc97fb8a04f5126961523"), "balance" : 1000, "name" : "A", "pendingTransactions" : [ ] }
+{ "_id" : ObjectId("4d7bc984b8a04f5126961524"), "balance" : 1000, "name" : "B", "pendingTransactions" : [ ] }
+<% end %>
+
+**Step 3:** set the transaction's state to "cancelled":
+
+<% code 'javascript' do %>
+foo:PRIMARY> db.transactions.update({_id: t._id}, {$set: {state: "cancelled"}})
+<% end %>
+
+### Multiple applications
+
+A common issue that exists with any DBs is how to make it safe for
+several applications to run transactions. It is important that only 1
+application handles a given transaction at one point in time, because
+otherwise conflicts can happen.
+
+One example is:
+
+- application A1 and A2 both grab transaction T1 which is in "initial"
+  state.
+
+- A1 applies the whole transaction before A2 starts
+
+- A2 applies transaction a 2nd time because it does not appear as
+  pending in the accounts
+
+To handle multiple applications, there should be a marker at the
+transaction level that the transaction is being handled. One can use
+findAndModify:
+
+<% code 'javascript' do %>
+foo:PRIMARY> t = db.transactions.findAndModify({query: {state: "initial", application: {$exists: 0}}, update: {$set: {state: "pending", application: "A1"}}, new: true})
+{
+	"_id" : ObjectId("4d7be8af2c10315c0847fc85"),
+	"application" : "A1",
+	"destination" : "B",
+	"source" : "A",
+	"state" : "pending",
+	"value" : 150
+}
+<% end %>
+
+The only remaining issue is if application A1 dies during transaction
+execution.The resume processes described in "Failure scenarios" can be
+applied, but application should make sure it owns the
+transactions. For example to resume pending jobs, query should be:
+
+<% code 'javascript' do %>
+foo:PRIMARY> db.transactions.find({application: "A1", state: "pending"})
+{ "_id" : ObjectId("4d7be8af2c10315c0847fc85"), "application" : "A1", "destination" : "B", "source" : "A", "state" : "pending", "value" : 150 }
+<% end %>
+
+### Proper two-phase commit
+
+This implementation tries to be simple on purpose, it assumes that:
+
+- an account operation can always be rolled back
+
+- the account balance can go negative
+
+A proper real world implementation would probably differ:
+
+- accounts have both a current balance, pending credits, pending
+  debits.
+
+- during step 2, application makes sure accounts has sufficient funds
+  for transaction, modifies credits/debits and adds transaction as
+  pending, all in one update.
+
+- during step 4, application actually applies the transaction on
+  balance, modifies credits/debits and removes transaction from
+  pending, all in one update.
+
+### Additional notes:
+
+In the context of important transactions, you will probably want to use:
+
+- reasonable "getLastError" to check that operations are actually
+  written to the DB (see "getLastError" or "write concern" for your
+  drivers).
+
+- durability so that operations are consistently saved on disk when an
+  operation returns successfully.
