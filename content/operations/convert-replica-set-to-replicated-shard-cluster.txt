@@ -88,7 +88,7 @@ hostname, or the IP address of your system.
 #### 1.4. Initialize the First Replica Set
 
 <% code 'javascript' do %>
-> db.runCommand({"replSetInitiate" : {"_id" : "firstset, "members" : [{"_id" : 1, "host" : "localhost:10001"}, {"_id" : 2, "host" : "localhost:10002"}, {"_id" : 3, "host" : "localhost:10003"}]}})
+> db.runCommand({"replSetInitiate" : {"_id" : "firstset", "members" : [{"_id" : 1, "host" : "localhost:10001"}, {"_id" : 2, "host" : "localhost:10002"}, {"_id" : 3, "host" : "localhost:10003"}]}})
 {
 	"info" : "Config now saved locally.  Should come online in about a minute.",
 	"ok" : 1
@@ -190,7 +190,7 @@ shard, using the following procedure:
 $ bin/mongo localhost:27017/admin
 MongoDB shell version: 2.0.2-rc1
 connecting to: localhost:27017/admin
-mongos> db.runCommand( { addshard : "first/localhost:10001,localhost:10002,localhost:10003" } )
+mongos> db.runCommand( { addshard : "firstset/localhost:10001,localhost:10002,localhost:10003" } )
 { "shardAdded" : "firstset", "ok" : 1 }
 mongos>
 <% end %>
