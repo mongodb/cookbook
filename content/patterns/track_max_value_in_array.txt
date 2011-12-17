@@ -9,90 +9,69 @@ filter:
   - markdown
 ---
 
-### Problem
+## Problem
 
-Your document contains an array of numbers, and you want to add an
+Your document contains an array of numbers and you want to add an
 attribute to the document which contains the maximum value in the array.
 You want to ensure that the document is updated safely and atomically so
 that this value always represents the maximum value after any number of
 additions to the array.
 
-#### Assumptions
+### Assumptions
 
-* You are updating the document by its `_id` or another unique field
-* You know the document already exists (i.e. you are not upserting)
+* You are updating the document by its `_id` or another unique field.
+* You know the document already exists (i.e. you are not "upserting.")
 
-
-### Solution
+## Solution
 
 MongoDB's atomic updates to not allow you to perform in-document
-comparisons when updating -- that is, there is no operator which will
-update a value if and only if it is greater than the existing version
-(which would make this recipe trivial, if it existed).
+comparisons when updating--that is, there is no operator which will
+update a value *if and only if* it is greater than the existing
+value. Such an operator would render this recipe trivial.
 
-However, we can emulate this behavior using a series three invocations
+However, you can accomplish this task with a series of two invocations
 of the `findAndModify` command:
 
-1. Issue a `findAndModify` command, using `_id` to locate the document,
-   and `max_value: {$gt: new_value}` to only apply the update in case the
-   document's current `max_value` is greater than the new value you are
-   adding to the array. If this query matches any document, perform a
-   `$push` in the update to add the new value to the array:
+1. Issue a `findAndModify` that sets the `max_value` and pushes to the
+   array at the same time. This operation only succeeds if the
+   `max_value` is less than the new value.
 
+2. If the previous operation fails, then fails because another update
+   has increased `max_value` since step 1. By definition, the existing
+   value is now more than the new value. so it is safe to push the new
+   value without regard for `max_value`.
 
-2. If that fails, it fails because the current `max_value` is **not**
-   greater than the new value we are attempting to add (remember, we
-   have assumed that a document with the given `_id` already exists). So
-   we can issue another `findAndModify` which sets the `max_value` and
-   pushes to the array at the same time, but only if the `max_value` is
-   less than the new value we are adding (because another update against
-   this document may have taken place between step 1 and step 2):
+To obtain the result of the `findAndModify` command, take the first
+result that succeeds and assign it to the `result` variable. Because
+`findAndModify` only runs for a second or third time if the preceding
+operations made no updates, then we know that there can only ever be a
+single value of `result`.
 
-
-3. If that fails, then it is because another update has increased
-   `max_value` between step 1 and step 2. By definition, it is now more
-   than the new value we are pushing to the array, so we can simply push
-   the new value without regard for `max_value`:
-
-4. To obtain the result of the `findAndModify` command, we take the
-   first of the results to have succeeded and assign it to the `result`
-   variable. Because we only run the second and third `findAndModify`
-   commands if the preceding ones did not update anything, then we know
-   that only one of them will have non-null value.
-
-
-Putting it all together, we get:
+The code for this operation resembles:
 
 <% code 'javascript' do %>
-var result1 = null, result2 = null, result3 = null;
+var result1 = null, result2 = null;
 
 result1 = db.collection.findAndModify({
-    query: {_id: ObjectId(...), max_value: {$gt: new_value}},
-    update: {$push: {array: new_value}}});
+    query: {_id: ObjectId(...), max_value: {$lt: new_value}},
+    update: {$push: {array: new_value}, $set: {max_value: new_value}}});
 
 if (result1 === null ) {
-    result2 = db.collection.findAndModify({
-        query: {_id: ObjectId(...), max_value: {$lt: new_value}},
-        update: {$push: {array: new_value}, $set: {max_value: new_value}}});
-}
-
-if (result1 === null && result2 === null) {
     result3 = db.collection.findAndModify({
         query: {_id: ObjectId(...)},
         update: {$push: {array: new_value}}});
 }
 
-var result = result1 || result2 || result3;
-
+var result = result1 || result2;
 <% end %>
 
-### Variations
+## Variations
 
-If you wish for `result` to contain the updated document, rather than
-the version that existed before one of the `findAndModify` commands
-succeeded, add `new: true` to the arguments to `findAndModify`.
+If you want the `result` variable to contain the entire updated
+document, rather than the version that existed before the
+`findAndModify` command that succeeded, add `new: true` to the
+arguments to `findAndModify`.
 
-If you wish for the `array` attribute of the document to contain a set
-of values, rather than an array of all values pushed, you can use the
-`$addToSet` operator in place of `$push`.
-
+If you want the `array` attribute of the document to contain a set of
+values, rather than an array of all values pushed, use the `$addToSet`
+operator rather than `$push`.
