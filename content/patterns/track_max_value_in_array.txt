@@ -1,0 +1,76 @@
+---
+title:      Track maximum value in array
+created_at: 2011-12-14 13:30:00.000000 -04:00
+recipe: true
+author: Dan Crosta
+description: How to keep a "max_value" attribute up to date when pushing values to an array
+filter:
+  - erb
+  - markdown
+---
+
+## Problem
+
+Your document contains an array of numbers and you want to add an
+attribute to the document which contains the maximum value in the array.
+You want to ensure that the document is updated safely and atomically so
+that this value always represents the maximum value after any number of
+additions to the array.
+
+### Assumptions
+
+* You are updating the document by its `_id` or another unique field.
+* You know the document already exists (i.e. you are not "upserting.")
+
+## Solution
+
+MongoDB's atomic updates to not allow you to perform in-document
+comparisons when updating--that is, there is no operator which will
+update a value *if and only if* it is greater than the existing
+value. Such an operator would render this recipe trivial.
+
+However, you can accomplish this task with two invocations of the
+`findAndModify` command:
+
+1. Issue a `findAndModify` that sets the `max_value` and pushes to the
+   array at the same time. This operation only succeeds if the
+   `max_value` is less than or equal to the new value.
+
+2. If the previous operation fails, it can only be because `max_value`
+   is already greater than the new value, so it is safe to push the new
+   value without regard for `max_value`.
+
+
+To obtain the result of the `findAndModify` command, take the first
+result that succeeds and assign it to the `result` variable. Because the
+second `findAndModify` only runs if the preceding operations made no
+updates, then we know that there can only ever be a single value of
+`result`.
+
+The code for this operation resembles:
+
+<% code 'javascript' do %>
+var result1 = null, result2 = null;
+
+result1 = db.collection.findAndModify({
+    query: {_id: ObjectId(...), max_value: {$lte: new_value}},
+    update: {$push: {array: new_value}, $set: {max_value: new_value}}});
+
+if (result1 === null ) {
+    result3 = db.collection.findAndModify({
+        query: {_id: ObjectId(...)},
+        update: {$push: {array: new_value}}});
+}
+
+var result = result1 || result2;
+<% end %>
+
+## Variations
+
+If you want the `result` variable to include the changes made by
+whichever of the two `findAndModify`s succeeded, add `new: true` to the
+arguments to `findAndModify`.
+
+If you want the `array` attribute of the document to contain a set of
+unique values, rather than an array of all values pushed, use the
+`$addToSet` operator rather than `$push`.
