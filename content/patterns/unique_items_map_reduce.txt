@@ -60,7 +60,7 @@ The reduce function is trivial, as it simply performs a count:
 
 
 <% code 'javascript' do %>
-reduce = "function(key, values) {
+reduce = function(key, values) {
   var count = 0;
 
   values.forEach(function(v) {
@@ -68,7 +68,7 @@ reduce = "function(key, values) {
   });
 
   return {count: count};
-}"
+}
 <% end %>
 
 ##### Run the command
@@ -87,9 +87,9 @@ Now that we have a prelimiary set of results, we can do a second pass to count u
 Here's the map function:
 
 <% code 'javascript' do %>
-map = "function() {
+map = function() {
   emit(this['_id']['day'], {count: 1});
-}"
+}
 <% end %>
 
 Because the first result set will store the *emit* key within an '_id' field, we have to reach into
