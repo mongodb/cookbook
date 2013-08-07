@@ -79,19 +79,16 @@ your number against the stored attribute.
 
 <% code 'javascript' do %>
 > rand = Math.random()
-> cmp  = Math.random()
 > result = db.docs.findOne( { key : 2, random : { $gte : rand } } )
 > if ( result == null ) {
->   result = db.docs.findOne( { key : 2, random : { $lte : rand } } )
+>   result = db.docs.findOne( { key : 2, random : { $lt : rand } } )
 > }
 <% end %>
 
 
 Note that we're not going for equality alone because the chances of
-that to occur are low. So we try either '$gte' or '$lte' with equal
-probability but knowing that in some cases it may not return a result,
-even though there are documents in the result. For that reason, an
-empty result must be verified by doing a search in the opposite
+that to occur are low. So we try '$gte', and as there is a possibility
+of it may not return a result, we must do a search in the opposite
 direction.
 
 The final -- but important -- detail about this query is that both the
