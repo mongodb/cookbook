@@ -1,0 +1,152 @@
+---
+title:      Finding duplicates
+created_at: 2014-04-24 23:00:00 -07:00
+recipe: true
+author: Dan Dascalescu, http://dandascalescu.com
+description: Three ways to find records with duplicate keys
+filter:
+  - erb
+  - markdown
+---
+
+### Problem
+
+You have a collection product names, and you want to find records that have the same `name`.
+
+Each product document looks something like this:
+
+<% code 'javascript' do %>
+{
+    "_id" : '...'
+    "name" : "Broom",
+    "url" : 'http://acme.com/products/titanium-broom',
+}
+<% end %>
+
+We'll present three solutions to finding duplicates. The last one is the best.
+
+### Solution 1 - mapReduce
+
+This solution is the easiest to understand, but slower. We'll use [mapReduce](docs.mongodb.org/manual/core/map-reduce/).
+Replace `name` with the field you want to find duplicates in:
+
+<% code 'javascript' do %>
+var map = function () { emit(this.name, 1) };  // change 'name' to your field here
+var reduce = function (keys, values) { return Array.sum(values) }
+var res = db.products.mapReduce(map, reduce, {out: "productDupes"});
+db[res.result].find({value: {$gt: 1}}).sort({value: -1});
+<% end %>
+
+In the mongo shell, the last query will show tuples of `name`s that are the same across more than one record,
+along with the number of records that share each name:
+
+<% code 'javascript' do %>
+{ "_id" : "Toothpick", "value" : 3 }
+{ "_id" : "Broom", "value" : 2 }
+<% end %>
+
+While we can easily sort the duplicates descending by count, the `_id`s of the duplicates are not returned.
+
+### Solution 2 - using `group`
+
+We'll use the [group](http://docs.mongodb.org/manual/reference/method/db.collection.group/) method, which is the
+equivalent of the SQL `GROUP BY` command. It returns an array of key values and counts.
+
+<% code 'javascript' do %>
+db.products.group({
+  key: {name: 1},  // change `name` to the field you care about
+  initial: {count: 0}, 
+  reduce: function (currentDocument, aggregationResult) { aggregationResult.count++ },
+  finalize: function(result) {
+    if (result.count < 2) return null;   // return only duplicates
+  }
+}).filter(function (element) { return element });  // filter out non-duplicates from the array
+<% end %>
+
+The output will look like this:
+
+<% code 'javascript' do %>
+[
+    {
+        "name" : "Broom",
+        "count" : 2
+    },
+    {
+        "name" : "Toothpick",
+        "count" : 3
+    }
+]
+<% end %>
+
+With this method, the `_id`s of the records with duplicate fields are not returned. Sorting the duplicates by count
+requires an extra [`sort`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort)
+to be applied to the array after `.filter()`.
+
+### Solution 3 - using aggregation
+
+This is the best solution:
+* faster for larger collections than map-reduce
+* returns the `_id`s of the duplicate records
+* can easily sort the duplicates by count
+
+We'll use the [aggregation framework](http://docs.mongodb.org/manual/core/aggregation-pipeline/).
+You need to replace `name` with the field you're targeting:
+
+<% code 'javascript' do %>
+db.products.aggregate([
+  { $group: {
+    _id: { name: "$name" },   // replace `name` here
+    uniqueIds: { $addToSet: "$_id" },
+    count: { $sum: 1 } 
+  } }, 
+  { $match: { 
+    count: { $gte: 2 } 
+  } },
+  { $sort : { count : -1} },
+  { $limit : 10 }
+]);
+<% end %>
+
+In the first stage of the aggregation pipeline, the [$group](http://docs.mongodb.org/manual/reference/operator/aggregation/group/)
+operator aggregates documents by the `name` field and stores in `uniqueIds` each `_id` value of the grouped records.
+The [$sum](http://docs.mongodb.org/manual/reference/operator/aggregation/sum/) operator adds up the values of the
+fields passed to it, in this case the constant `1` - thereby counting the number of grouped records into the `count` field.
+
+In the second stage of the pipeline, we use [$match](http://docs.mongodb.org/manual/reference/operator/aggregation/match/)
+to filter documents with a `count` of at least 2, i.e. duplicates.
+
+Then, we sort the most frequent duplicates first, and limit the results to the top 10.
+
+This query will output up to `$limit` `products` with duplicate names, along with their `_id`s:
+
+<% code 'javascript' do %>
+{
+    "_id" : {
+        "name" : "Toothpick"
+    },
+    "uniqueIds" : [
+        "xzuzJd2qatfJCSvkN",
+        "9bpewBsKbrGBQexv4",
+        "fi3Gscg9M64BQdArv",
+    ],
+    "count" : 3
+},
+{
+    "_id" : {
+        "name" : "Broom"
+    },
+    "uniqueIds" : [
+        "3vwny3YEj2qBsmmhA",
+        "gJeWGcuX6Wk69oFYD"
+    ],
+    "count" : 2
+}
+<% end %>
+
+### See Also
+
+* The MongoDB [docs on aggregation][1]
+* [MapReduce: the Fanfiction][2] by Kristina Chodorow
+
+  [1]: http://docs.mongodb.org/manual/aggregation/
+  [2]: http://www.kchodorow.com/blog/2010/03/15/mapreduce-the-fanfiction/
