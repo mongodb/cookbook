@@ -135,6 +135,6 @@ db.pageviews.mapReduce(map, reduce,
 * [MapReduce: the Fanfiction][3] by Kristina Chodorow
 
   [1]: http://www.mongodb.org/display/DOCS/Aggregation
-  [2]: http://kylebanker.com/blog/2009/12/mongodb-map-reduce-basics/
-  [3]: http://www.snailinaturtleneck.com/blog/2010/03/15/mapreduce-the-fanfiction/
+  [2]: https://web.archive.org/web/20130904073410/http://kylebanker.com/blog/2009/12/mongodb-map-reduce-basics
+  [3]: http://www.kchodorow.com/blog/2010/03/15/mapreduce-the-fanfiction/
 
